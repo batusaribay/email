@@ -1,0 +1,7 @@
+# The project is Rust-only for GitHub language statistics.
+*.py linguist-detectable=false
+
+# Non-source files and the generated lockfile.
+preview.txt linguist-documentation
+Cargo.lock linguist-generated
+preview.png binary
