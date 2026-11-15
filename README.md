@@ -1,6 +1,6 @@
 # Mail Client
 
-A terminal email client for IMAP and SMTP.
+An email client for IMAP and SMTP in the terminal.
 
 ![mail-client in a terminal](preview.png)
 

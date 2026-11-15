@@ -4,7 +4,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use crate::config::TlsMode;
 
-/// A fast, scriptable IMAP/SMTP mail client for the terminal.
+/// An email client for IMAP and SMTP in the terminal.
 ///
 /// Password authentication works with Gmail app passwords, Fastmail, iCloud,
 /// Yahoo, self-hosted IMAP/SMTP, and other providers. Use `mail-client account add`
@@ -13,7 +13,7 @@ use crate::config::TlsMode;
 #[command(
     name = "mail-client",
     version,
-    about = "A fast, scriptable IMAP/SMTP mail client",
+    about = "An email client for IMAP and SMTP in the terminal",
     long_about = None,
     propagate_version = true,
     arg_required_else_help = true
