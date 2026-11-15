@@ -6,9 +6,12 @@ A terminal email client for IMAP and SMTP.
 
 ## Why
 
-Webmail is built for a browser and a mouse. This keeps email in the shell: the
-same place as your editor, scripts, and terminal workflow, without a tab, a page
-load, or a context switch.
+A browser-based mail client is a separate application inside a browser: a tab, a
+login session, and a mouse-first interface stand between you and a single
+message. Terminal mail has no such layer. It runs in the shell you are already
+using, works over SSH, keeps the keyboard as the primary interface, and exposes
+messages to scripts instead of only through a web UI. For quick checks and
+repeated work, that means fewer steps and more control.
 
 ## How it works
 
