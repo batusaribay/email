@@ -17,7 +17,6 @@ anyhow = "1"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["clock"] }
 clap = { version = "4.6", features = ["derive", "env"] }
-clap_complete = "4.6"
 imap = "2.4"
 keyring = { version = "3.6.3", default-features = false, features = ["linux-native-sync-persistent", "crypto-rust", "apple-native", "windows-native"] }
 lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls-tls"] }

@@ -6,8 +6,10 @@ A terminal email client for IMAP and SMTP.
 
 ## Why
 
-One binary for any standard mail provider. Gmail app passwords work without a
-Google Cloud OAuth project.
+Useful when you want mail without leaving the terminal: scan and search quickly,
+read and reply, pipe message IDs into scripts, and send from shell automation.
+One binary handles any standard IMAP/SMTP account, so the workflow stays the
+same across providers.
 
 ## How it works
 
@@ -108,17 +110,6 @@ cargo install --path . --locked
 ```
 
 The binary is installed as `mail-client`.
-
-Shell completions are generated for the current `$SHELL`, or for a named shell:
-
-```bash
-mail-client completions bash > ~/.local/share/bash-completion/completions/mail-client
-mail-client completions zsh > ~/.zfunc/_mail-client
-mail-client completions fish > ~/.config/fish/completions/mail-client.fish
-
-# detected from $SHELL, printed to stdout
-mail-client completions
-```
 
 ## Configuration
 

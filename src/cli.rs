@@ -84,13 +84,6 @@ pub enum Command {
 
     /// Set read or starred flags on messages.
     Mark(MarkArgs),
-
-    /// Generate shell completion scripts.
-    Completions {
-        /// Shell to generate completions for (defaults to $SHELL).
-        #[arg(value_enum)]
-        shell: Option<clap_complete::Shell>,
-    },
 }
 
 #[derive(Debug, Subcommand)]

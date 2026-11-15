@@ -41,15 +41,6 @@ async fn main() {
 
 async fn run() -> Result<()> {
     let cli = parse_cli();
-    if let Command::Completions { shell } = &cli.command {
-        let shell = shell.or_else(detect_shell).ok_or_else(|| {
-            anyhow::anyhow!("could not detect $SHELL; pass bash, zsh, fish, powershell, or elvish")
-        })?;
-        let mut command = Cli::command();
-        clap_complete::generate(shell, &mut command, "mail-client", &mut std::io::stdout());
-        return Ok(());
-    }
-
     let config_dir = resolve_config_dir(cli.config_dir.as_deref())?;
     let mut config = load_config(&config_dir)?;
     migrate_legacy_passwords(&config_dir, &mut config)?;
@@ -104,27 +95,9 @@ async fn run() -> Result<()> {
                 Command::Archive(args) => archive(&account, &password, args, inbox).await,
                 Command::Trash(args) => trash(&account, &password, args, inbox).await,
                 Command::Mark(args) => mark(&account, &password, args, inbox).await,
-                Command::Completions { .. } | Command::Account { .. } | Command::Send(_) => {
-                    unreachable!("handled above")
-                }
+                Command::Account { .. } | Command::Send(_) => unreachable!("handled above"),
             }
         }
-    }
-}
-
-fn detect_shell() -> Option<clap_complete::Shell> {
-    let shell = env::var("SHELL").ok()?;
-    let name = Path::new(&shell)
-        .file_name()?
-        .to_str()?
-        .to_ascii_lowercase();
-    match name.as_str() {
-        "bash" => Some(clap_complete::Shell::Bash),
-        "zsh" => Some(clap_complete::Shell::Zsh),
-        "fish" => Some(clap_complete::Shell::Fish),
-        "elvish" => Some(clap_complete::Shell::Elvish),
-        "pwsh" | "powershell" => Some(clap_complete::Shell::PowerShell),
-        _ => None,
     }
 }
 
