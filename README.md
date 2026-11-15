@@ -38,7 +38,7 @@ Protection is enabled, or a Workspace administrator disabled app passwords.
 
 ### Commands
 
-| Command | Description |
+| Command | Action |
 | --- | --- |
 | `mail-client account add` | Add or update an account |
 | `mail-client account list` | Show configured accounts |
