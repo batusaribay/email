@@ -102,7 +102,9 @@ async fn run() -> Result<()> {
 }
 
 fn parse_cli() -> Cli {
-    let command = Cli::command().styles(clap::builder::Styles::plain());
+    let command = Cli::command()
+        .styles(clap::builder::Styles::plain())
+        .color(clap::ColorChoice::Never);
     let matches = command.get_matches();
     Cli::from_arg_matches(&matches).unwrap_or_else(|error| error.exit())
 }

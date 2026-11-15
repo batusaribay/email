@@ -2,11 +2,7 @@
 
 A terminal email client for IMAP and SMTP.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="preview.png">
-  <source media="(prefers-color-scheme: light)" srcset="preview-light.png">
-  <img alt="mail-client in a terminal" src="preview-light.png">
-</picture>
+![mail-client in a terminal](preview.png)
 
 ## What it is
 
