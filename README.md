@@ -1,38 +1,27 @@
 # Mail Client
 
-A small, command-based email client for the terminal. It speaks IMAP and SMTP,
-so it works with Gmail, Fastmail, iCloud, Yahoo, self-hosted mail, and any other
-provider that supports app passwords or password authentication.
+A terminal email client for IMAP and SMTP.
 
 ![mail-client in a terminal](preview.png)
 
 ## Why
 
-The Gmail API requires a Google Cloud OAuth project. IMAP and SMTP with a Gmail
-app password do not. That makes this usable when Cloud Console is unavailable,
-and it keeps the same client working across providers instead of locking it to
-one company.
-
-There is one binary and one project. No separate Gmail client, no TUI, no GUI.
+One binary for any standard mail provider. Gmail app passwords work without a
+Google Cloud OAuth project.
 
 ## How it works
 
 1. Accounts live in `~/.config/mail-client/config.json`; passwords live in the
-   operating system's keyring, not in that file.
-2. IMAP is used for listing, searching, reading, folders, flags, moves, and
-   trash. TLS is verified by default; STARTTLS and plain TCP are available for
-   custom or local servers.
-3. `list` and `search` remember the mailbox they used. `read`, `reply`,
-   `attachments`, `attachment`, and `mark` use that mailbox automatically, so
-   Gmail All Mail UIDs keep working after a search.
+   operating system's keyring.
+2. IMAP handles listing, searching, reading, folders, flags, moves, and trash.
+   TLS is verified by default.
+3. `list` and `search` remember the mailbox they used, so follow-up commands use
+   the same one.
 4. Reading marks a message as seen. `--no-mark-read` opts out.
-5. MIME is parsed locally. HTML-only mail is converted to clean text; charset
-   handling, RFC 2047 headers, and base64/quoted-printable parts are decoded.
-6. Sending and replying go through SMTP. Bcc addresses are used for the
-   envelope only and are never written into message headers.
-7. Provider presets supply the usual hostnames and folder names. Gmail's
-   localized folders are discovered through IMAP special-use flags instead of
-   hard-coded English names.
+5. MIME is parsed locally, including charsets, encoded headers, and attachments.
+6. Sending and replying go through SMTP. Bcc is used for the envelope only.
+7. Provider presets cover common hosts and folders; Gmail's localized folders
+   are discovered through IMAP special-use flags.
 
 ## Usage
 
@@ -104,19 +93,7 @@ mail-client trash 4821,4822,4823
 ```
 
 Gmail searches use `[Gmail]/All Mail` by default. Other mailboxes can be
-selected with `--mailbox`. The mailbox is remembered, so a UID from a search can
-be passed straight to `read`, `reply`, `attachments`, or `mark`.
-
-### Output
-
-- `table` for people
-- `plain` for `cut`, `awk`, and `fzf`
-- `json` for scripts
-
-```bash
-mail-client list --format json | jq -r '.messages[].uid'
-mail-client list --format plain | cut -f1
-```
+selected with `--mailbox`.
 
 ## Installation
 
@@ -185,59 +162,7 @@ If a folder name is unusual, override it with `--trash-mailbox`,
 - No telemetry, analytics, or background polling.
 
 An app password grants full mailbox access. Revoke it from your provider if a
-machine is lost, and prefer a provider app password over your account password.
-
-## Files
-
-```
-src/main.rs      CLI dispatch and command handlers
-src/cli.rs       clap command and argument definitions
-src/config.rs    accounts, servers, presets, config persistence
-src/secrets.rs   OS keyring access
-src/imap.rs      IMAP listing, search, read, folders, flags, moves
-src/smtp.rs      SMTP send and connection test
-src/mime.rs      MIME generation, HTML-to-text, header encoding
-src/render.rs    table, plain, and JSON output
-src/presets.rs   Gmail, Outlook, Yahoo, iCloud, Fastmail defaults
-src/model.rs     shared message, attachment, folder, and result types
-scripts/make-terminal-preview.py   terminal preview renderer
-preview.txt                        source transcript for preview.png
-```
-
-## Development
-
-```bash
-cargo fmt --check
-cargo clippy --all-targets -- -D warnings
-cargo test
-cargo build --release
-```
-
-The README preview is generated from `preview.txt`:
-
-```bash
-python3 scripts/make-terminal-preview.py preview.txt preview.png
-```
-
-The test suite includes mock IMAP and SMTP servers, so search, fetch, HTML
-conversion, attachments, send, and reply can be exercised without a live inbox.
-
-## Known issues
-
-- No conversation/thread view, drafts, contacts, or calendar yet.
-- No permanent-delete command; trash is reversible.
-- Outlook/Microsoft 365 commonly requires OAuth for IMAP/SMTP.
-- Move and trash need IMAP UIDPLUS.
-- Self-signed TLS certificates are not bypassable.
-- Text mode renders HTML-only mail as plain text; use `--html` or JSON when the
-  original markup matters.
-
-## Future ideas
-
-- Thread grouping and a draft workflow
-- Optional local message cache
-- OAuth support for providers that no longer allow app passwords
-- Per-account signatures and send-as aliases
+machine is lost.
 
 ## License
 
