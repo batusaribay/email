@@ -4,6 +4,19 @@ A terminal email client for IMAP and SMTP.
 
 ![mail-client in a terminal](preview.png)
 
+## What it is
+
+A terminal client for standard IMAP and SMTP accounts. It reads, sends, searches,
+and manages mail without a browser or a TUI.
+
+## Why this exists
+
+A browser-based mail client is a separate application inside a browser: a tab, a
+login session, and a mouse-first interface stand between you and a single
+message. Terminal mail has no such layer. It runs in the shell you are already
+using, works over SSH, keeps the keyboard as the primary interface, and exposes
+messages to scripts instead of only through a web UI.
+
 ## How it works
 
 1. Accounts live in `~/.config/mail-client/config.json`; passwords live in the
@@ -96,18 +109,20 @@ selected with `--mailbox`.
 Service / KWallet / Keychain / Credential Manager for password storage.
 
 ```bash
-git clone https://github.com/batusaribay/mail-client.git
-cd mail-client
-cargo build --release
-cargo install --path . --locked
-```
-
-The binary is installed as `mail-client`. You can also install directly from
-the repository:
-
-```bash
 cargo install --git https://github.com/batusaribay/mail-client.git --locked
 ```
+
+The binary is installed as `mail-client`.
+
+## Uninstall
+
+```bash
+mail-client account remove   # removes the account and its keyring entry
+cargo uninstall mail-client
+rm -rf ~/.config/mail-client
+```
+
+`account remove` is only needed if you want to delete the stored keyring entry.
 
 ## Security
 
