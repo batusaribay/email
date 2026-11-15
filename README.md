@@ -6,10 +6,9 @@ A terminal email client for IMAP and SMTP.
 
 ## Why
 
-Useful when you want mail without leaving the terminal: scan and search quickly,
-read and reply, pipe message IDs into scripts, and send from shell automation.
-One binary handles any standard IMAP/SMTP account, so the workflow stays the
-same across providers.
+Webmail is built for a browser and a mouse. This keeps email in the shell: the
+same place as your editor, scripts, and terminal workflow, without a tab, a page
+load, or a context switch.
 
 ## How it works
 
