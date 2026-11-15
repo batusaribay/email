@@ -1,0 +1,16 @@
+$ mail-client list -n 5
+## UID    DATE              FROM           SUBJECT
+.. ----   ----------------  -------------  ------------------------------
+4821   2026-11-14 18:21  Alice Example  Lunch tomorrow?
+4807   2026-11-14 16:02  GitHub         [repo] New issue #42
+4799   2026-11-13 09:44  Stripe         Your invoice is ready
+
+$ mail-client read 4821
+From:    Alice Example <alice@example.com>
+To:      you@example.com
+Date:    2026-11-14 18:21
+Subject: Lunch tomorrow?
+
+Sure — see you at 12:30.
+
+$

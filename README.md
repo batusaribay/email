@@ -200,6 +200,8 @@ src/mime.rs      MIME generation, HTML-to-text, header encoding
 src/render.rs    table, plain, and JSON output
 src/presets.rs   Gmail, Outlook, Yahoo, iCloud, Fastmail defaults
 src/model.rs     shared message, attachment, folder, and result types
+scripts/make-terminal-preview.py   terminal preview renderer
+preview.txt                        source transcript for preview.png
 ```
 
 ## Development
@@ -209,6 +211,12 @@ cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 cargo build --release
+```
+
+The README preview is generated from `preview.txt`:
+
+```bash
+python3 scripts/make-terminal-preview.py preview.txt preview.png
 ```
 
 The test suite includes mock IMAP and SMTP servers, so search, fetch, HTML
