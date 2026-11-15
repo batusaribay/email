@@ -4,15 +4,6 @@ A terminal email client for IMAP and SMTP.
 
 ![mail-client in a terminal](preview.png)
 
-## Why
-
-A browser-based mail client is a separate application inside a browser: a tab, a
-login session, and a mouse-first interface stand between you and a single
-message. Terminal mail has no such layer. It runs in the shell you are already
-using, works over SSH, keeps the keyboard as the primary interface, and exposes
-messages to scripts instead of only through a web UI. For quick checks and
-repeated work, that means fewer steps and more control.
-
 ## How it works
 
 1. Accounts live in `~/.config/mail-client/config.json`; passwords live in the
@@ -47,7 +38,7 @@ Protection is enabled, or a Workspace administrator disabled app passwords.
 
 ### Commands
 
-| Command | What it does |
+| Command | Description |
 | --- | --- |
 | `mail-client account add` | Add or update an account |
 | `mail-client account list` | Show configured accounts |
@@ -111,35 +102,12 @@ cargo build --release
 cargo install --path . --locked
 ```
 
-The binary is installed as `mail-client`.
-
-## Configuration
-
-| Path | Purpose |
-| --- | --- |
-| `~/.config/mail-client/config.json` | Accounts, servers, folder names, current mailbox |
-| OS keyring (`mail-client`) | Account passwords |
-
-Environment variables:
-
-| Variable | Purpose |
-| --- | --- |
-| `MAIL_CLIENT_CONFIG_DIR` | Alternate config directory |
-| `MAIL_CLIENT_ACCOUNT` | Default account selector |
-| `MAIL_CLIENT_PASSWORD` | Password override; bypasses the keyring |
-
-Accounts can also be kept separate with `--config-dir`. To use a custom server:
+The binary is installed as `mail-client`. You can also install directly from
+the repository:
 
 ```bash
-mail-client account add \
-  --email me@example.org \
-  --preset custom \
-  --imap-host imap.example.org --imap-port 993 --imap-tls tls \
-  --smtp-host smtp.example.org --smtp-port 587 --smtp-tls starttls
+cargo install --git https://github.com/batusaribay/mail-client.git --locked
 ```
-
-If a folder name is unusual, override it with `--trash-mailbox`,
-`--archive-mailbox`, `--sent-mailbox`, and related options.
 
 ## Security
 
