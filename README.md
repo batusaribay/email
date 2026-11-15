@@ -2,7 +2,11 @@
 
 A terminal email client for IMAP and SMTP.
 
-![mail-client in a terminal](preview.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="preview.png">
+  <source media="(prefers-color-scheme: light)" srcset="preview-light.png">
+  <img alt="mail-client in a terminal" src="preview-light.png">
+</picture>
 
 ## What it is
 
@@ -111,8 +115,6 @@ Service / KWallet / Keychain / Credential Manager for password storage.
 ```bash
 cargo install --git https://github.com/batusaribay/mail-client.git --locked
 ```
-
-The binary is installed as `mail-client`.
 
 ## Uninstall
 
