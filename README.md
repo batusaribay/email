@@ -1,6 +1,6 @@
 # email
 
-An email client for IMAP and SMTP in the terminal.
+A Rust CLI email client for IMAP and SMTP.
 
 ![email in a terminal](preview.png)
 

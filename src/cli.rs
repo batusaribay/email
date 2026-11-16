@@ -4,7 +4,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use crate::config::TlsMode;
 
-/// An email client for IMAP and SMTP in the terminal.
+/// A Rust CLI email client for IMAP and SMTP.
 ///
 /// Password authentication works with Gmail app passwords, Fastmail, iCloud,
 /// Yahoo, self-hosted IMAP/SMTP, and other providers. Use `email account add`
@@ -13,7 +13,7 @@ use crate::config::TlsMode;
 #[command(
     name = "email",
     version,
-    about = "An email client for IMAP and SMTP in the terminal",
+    about = "A Rust CLI email client for IMAP and SMTP",
     long_about = None,
     propagate_version = true,
     arg_required_else_help = true
