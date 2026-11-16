@@ -103,7 +103,7 @@ mail-client trash 4821,4822,4823
 Gmail searches use `[Gmail]/All Mail` by default. Other mailboxes can be
 selected with `--mailbox`.
 
-## Installation
+## Install
 
 **Requirements:** Rust 1.85+, a C toolchain, OpenSSL, and an unlocked Secret
 Service / KWallet / Keychain / Credential Manager for password storage.
