@@ -112,10 +112,6 @@ fn print_message_text(message: &ParsedMessage, html: bool, headers_only: bool) {
                 cell(&attachment.mime_type)
             );
         }
-        println!(
-            "Download: email attachment {} <number> --mailbox '{}'",
-            message.uid, message.mailbox
-        );
     }
     println!();
     if headers_only {
@@ -179,11 +175,6 @@ pub fn print_attachments(message: &ParsedMessage, format: OutputFormat) -> Resul
                     })
                     .collect();
                 print_table(&["#", "SIZE", "TYPE", "FILENAME"], &rows, &[3, 10, 30, 70]);
-                println!();
-                println!(
-                    "Download with: email attachment {} <number> --mailbox '{}'",
-                    message.uid, message.mailbox
-                );
             }
             Ok(())
         }
@@ -406,8 +397,6 @@ fn print_table(headers: &[&str], rows: &[Vec<String>], max_widths: &[usize]) {
         .map(|(index, header)| pad(header, widths[index]))
         .collect();
     println!("{}", header_cells.join("  "));
-    let separator: Vec<String> = widths.iter().map(|width| "-".repeat(*width)).collect();
-    println!("{}", separator.join("  "));
     for row in rows {
         let cells: Vec<String> = (0..columns)
             .map(|index| {

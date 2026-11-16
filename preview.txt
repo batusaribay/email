@@ -1,6 +1,5 @@
 $ email list -n 5
 ## UID    DATE              FROM           SUBJECT
-.. ----   ----------------  -------------  ------------------------------
 4821   2026-11-14 18:21  Alice Example  Lunch tomorrow?
 4807   2026-11-14 16:02  GitHub         [repo] New issue #42
 4799   2026-11-13 09:44  Stripe         Your invoice is ready
