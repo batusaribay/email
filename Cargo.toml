@@ -1,15 +1,15 @@
 [package]
-name = "mail-client"
+name = "email"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 description = "An email client for IMAP and SMTP in the terminal"
 license = "MIT"
-repository = "https://github.com/batusaribay/mail-client"
+repository = "https://github.com/batusaribay/email"
 publish = false
 
 [[bin]]
-name = "mail-client"
+name = "email"
 path = "src/main.rs"
 
 [dependencies]

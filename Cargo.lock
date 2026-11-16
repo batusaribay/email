@@ -519,6 +519,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "email"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "chrono",
+ "clap",
+ "imap",
+ "keyring",
+ "lettre",
+ "mail-parser",
+ "native-tls",
+ "percent-encoding",
+ "rand",
+ "rpassword",
+ "serde",
+ "serde_json",
+ "sigpipe",
+ "tokio",
+]
+
+[[package]]
 name = "email-encoding"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1097,28 +1119,6 @@ name = "log"
 version = "0.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
-
-[[package]]
-name = "mail-client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "chrono",
- "clap",
- "imap",
- "keyring",
- "lettre",
- "mail-parser",
- "native-tls",
- "percent-encoding",
- "rand",
- "rpassword",
- "serde",
- "serde_json",
- "sigpipe",
- "tokio",
-]
 
 [[package]]
 name = "mail-parser"

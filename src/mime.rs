@@ -82,7 +82,7 @@ pub fn build_message(message: &OutgoingMessage) -> Result<BuiltMessage> {
     }
     headers.push_str(&format!("Message-ID: {message_id}\r\n"));
     headers.push_str(concat!(
-        "X-Mailer: mail-client/",
+        "X-Mailer: email/",
         env!("CARGO_PKG_VERSION"),
         "\r\n"
     ));
@@ -271,7 +271,7 @@ fn base64_wrapped(bytes: &[u8]) -> String {
 fn random_boundary() -> String {
     let mut bytes = [0_u8; 18];
     rand::thread_rng().fill_bytes(&mut bytes);
-    format!("mail-client-{}", URL_SAFE_NO_PAD.encode(bytes))
+    format!("email-{}", URL_SAFE_NO_PAD.encode(bytes))
 }
 
 fn make_message_id(from: &str) -> String {
@@ -546,15 +546,15 @@ mod tests {
     #[test]
     fn builds_attachment_message() {
         let path =
-            std::env::temp_dir().join(format!("mail-client-test-{}-note.toml", std::process::id()));
+            std::env::temp_dir().join(format!("email-test-{}-note.toml", std::process::id()));
         std::fs::write(&path, "[test]\nvalue = 1\n").unwrap();
         let built = build_message(&sample(vec![path.clone()])).unwrap();
         let raw = String::from_utf8(built.bytes).unwrap();
         let _ = std::fs::remove_file(path);
         assert!(raw.contains("Content-Type: multipart/mixed; boundary=\""));
-        assert!(raw.contains("Content-Type: application/toml; name=\"mail-client-test-"));
+        assert!(raw.contains("Content-Type: application/toml; name=\"email-test-"));
         assert!(!raw.contains("name=name="));
-        assert!(raw.contains("Content-Disposition: attachment; filename=\"mail-client-test-"));
+        assert!(raw.contains("Content-Disposition: attachment; filename=\"email-test-"));
     }
 
     #[test]

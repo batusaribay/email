@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail};
 use keyring::{Entry, Error as KeyringError};
 
-const SERVICE: &str = "mail-client";
+const SERVICE: &str = "email";
 
 fn entry(email: &str) -> Result<Entry> {
     let user = email.trim().to_ascii_lowercase();

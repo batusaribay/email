@@ -113,7 +113,7 @@ fn print_message_text(message: &ParsedMessage, html: bool, headers_only: bool) {
             );
         }
         println!(
-            "Download: mail-client attachment {} <number> --mailbox '{}'",
+            "Download: email attachment {} <number> --mailbox '{}'",
             message.uid, message.mailbox
         );
     }
@@ -181,7 +181,7 @@ pub fn print_attachments(message: &ParsedMessage, format: OutputFormat) -> Resul
                 print_table(&["#", "SIZE", "TYPE", "FILENAME"], &rows, &[3, 10, 30, 70]);
                 println!();
                 println!(
-                    "Download with: mail-client attachment {} <number> --mailbox '{}'",
+                    "Download with: email attachment {} <number> --mailbox '{}'",
                     message.uid, message.mailbox
                 );
             }
@@ -274,7 +274,7 @@ pub fn print_accounts(config: &Config, format: OutputFormat) -> Result<()> {
         OutputFormat::Table => {
             if views.is_empty() {
                 println!(
-                    "No accounts configured. Run `mail-client account add --email you@example.com`."
+                    "No accounts configured. Run `email account add --email you@example.com`."
                 );
             } else {
                 let rows: Vec<Vec<String>> = views

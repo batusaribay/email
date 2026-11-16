@@ -7,11 +7,11 @@ use crate::config::TlsMode;
 /// An email client for IMAP and SMTP in the terminal.
 ///
 /// Password authentication works with Gmail app passwords, Fastmail, iCloud,
-/// Yahoo, self-hosted IMAP/SMTP, and other providers. Use `mail-client account add`
+/// Yahoo, self-hosted IMAP/SMTP, and other providers. Use `email account add`
 /// once, then list, read, send, and manage folders from any terminal.
 #[derive(Debug, Parser)]
 #[command(
-    name = "mail-client",
+    name = "email",
     version,
     about = "An email client for IMAP and SMTP in the terminal",
     long_about = None,
@@ -19,17 +19,12 @@ use crate::config::TlsMode;
     arg_required_else_help = true
 )]
 pub struct Cli {
-    /// Configuration directory (defaults to $XDG_CONFIG_HOME/mail-client).
-    #[arg(
-        long,
-        global = true,
-        env = "MAIL_CLIENT_CONFIG_DIR",
-        value_name = "DIR"
-    )]
+    /// Configuration directory (defaults to $XDG_CONFIG_HOME/email).
+    #[arg(long, global = true, env = "EMAIL_CONFIG_DIR", value_name = "DIR")]
     pub config_dir: Option<PathBuf>,
 
     /// Account email to use (defaults to the configured default account).
-    #[arg(long, global = true, env = "MAIL_CLIENT_ACCOUNT", value_name = "EMAIL")]
+    #[arg(long, global = true, env = "EMAIL_ACCOUNT", value_name = "EMAIL")]
     pub account: Option<String>,
 
     #[command(subcommand)]
@@ -173,7 +168,7 @@ pub struct AddAccountArgs {
     #[arg(long)]
     pub password_stdin: bool,
 
-    /// Do not store the password in the OS keyring; prompt or use MAIL_CLIENT_PASSWORD later.
+    /// Do not store the password in the OS keyring; prompt or use EMAIL_PASSWORD later.
     #[arg(long)]
     pub no_save_password: bool,
 
@@ -418,7 +413,7 @@ pub struct AttachmentArgs {
     /// Message UID.
     pub uid: u32,
 
-    /// Attachment number from `mail-client attachments` (1-based).
+    /// Attachment number from `email attachments` (1-based).
     pub attachment: usize,
 
     /// Mailbox containing the message (defaults to the last list/search mailbox, then INBOX).

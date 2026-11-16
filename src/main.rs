@@ -284,7 +284,7 @@ fn add_account(config_dir: &Path, config: &mut Config, args: AddAccountArgs) -> 
             .read_line(&mut value)
             .context("could not read password from stdin")?;
         Some(clean_password(&value, preset == Preset::Gmail))
-    } else if let Ok(value) = env::var("MAIL_CLIENT_PASSWORD") {
+    } else if let Ok(value) = env::var("EMAIL_PASSWORD") {
         if value.is_empty() {
             Some(clean_password(
                 &prompt_password(&email)?,
@@ -342,7 +342,7 @@ fn add_account(config_dir: &Path, config: &mut Config, args: AddAccountArgs) -> 
     );
     if args.no_save_password {
         println!(
-            "Password: not saved; set MAIL_CLIENT_PASSWORD or run `mail-client account password {email}`."
+            "Password: not saved; set EMAIL_PASSWORD or run `email account password {email}`."
         );
     } else {
         println!("Password: stored in the OS keyring.");
@@ -354,7 +354,7 @@ fn add_account(config_dir: &Path, config: &mut Config, args: AddAccountArgs) -> 
         );
     }
     eprintln!("{}", defaults.note);
-    println!("Next: mail-client account test {email}");
+    println!("Next: email account test {email}");
     Ok(())
 }
 
@@ -363,7 +363,7 @@ fn select_account<'a>(config: &'a Config, selector: Option<&str>) -> Result<&'a 
 }
 
 fn resolve_password(config_dir: &Path, config: &mut Config, account: &Account) -> Result<String> {
-    if let Ok(value) = env::var("MAIL_CLIENT_PASSWORD") {
+    if let Ok(value) = env::var("EMAIL_PASSWORD") {
         if !value.is_empty() {
             return Ok(clean_password(&value, account.is_gmail()));
         }
@@ -409,8 +409,8 @@ fn resolve_password(config_dir: &Path, config: &mut Config, account: &Account) -
         Ok(password)
     } else {
         let mut message = format!(
-            "no password available for {}. Set MAIL_CLIENT_PASSWORD or store one with \
-             `mail-client account password {}`.",
+            "no password available for {}. Set EMAIL_PASSWORD or store one with \
+             `email account password {}`.",
             account.email, account.email
         );
         if account.is_gmail() {
@@ -426,7 +426,7 @@ fn resolve_password(config_dir: &Path, config: &mut Config, account: &Account) -
 fn prompt_password(email: &str) -> Result<String> {
     if !std::io::stdin().is_terminal() {
         bail!(
-            "cannot prompt for a password without a terminal; use MAIL_CLIENT_PASSWORD \
+            "cannot prompt for a password without a terminal; use EMAIL_PASSWORD \
              or --password-stdin"
         );
     }

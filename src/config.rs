@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
-const APP_DIR_NAME: &str = "mail-client";
+const APP_DIR_NAME: &str = "email";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
 #[serde(rename_all = "lowercase")]
@@ -158,9 +158,7 @@ impl Config {
                 .iter()
                 .find(|account| account.email.eq_ignore_ascii_case(selector))
                 .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "account '{selector}' not found (see `mail-client account list`)"
-                    )
+                    anyhow::anyhow!("account '{selector}' not found (see `email account list`)")
                 })?
         } else if let Some(default) = self.default_account.as_deref() {
             self.accounts
@@ -168,16 +166,16 @@ impl Config {
                 .find(|account| account.email.eq_ignore_ascii_case(default))
                 .ok_or_else(|| {
                     anyhow::anyhow!(
-                        "default account '{default}' is not configured; run `mail-client account list`"
+                        "default account '{default}' is not configured; run `email account list`"
                     )
                 })?
         } else {
             match self.accounts.as_slice() {
                 [account] => account,
-                [] => bail!("no mail accounts configured. Run `mail-client account add`."),
+                [] => bail!("no mail accounts configured. Run `email account add`."),
                 _ => bail!(
                     "multiple accounts are configured; pass --account EMAIL or set one with \
-                     `mail-client account default EMAIL`"
+                     `email account default EMAIL`"
                 ),
             }
         };
@@ -229,7 +227,7 @@ pub fn resolve_config_dir(explicit: Option<&Path>) -> Result<PathBuf> {
     if let Some(path) = explicit {
         return Ok(expand_tilde(path));
     }
-    if let Some(path) = env::var_os("MAIL_CLIENT_CONFIG_DIR") {
+    if let Some(path) = env::var_os("EMAIL_CONFIG_DIR") {
         return Ok(expand_tilde(&PathBuf::from(path)));
     }
     if let Some(path) = env::var_os("XDG_CONFIG_HOME") {
@@ -284,7 +282,7 @@ pub fn save_config(dir: &Path, config: &Config) -> Result<()> {
     {
         bail!(
             "refusing to save a plaintext password. Unlock the OS keyring and run the \
-             command again, or set MAIL_CLIENT_PASSWORD."
+             command again, or set EMAIL_PASSWORD."
         );
     }
     let bytes = serde_json::to_vec_pretty(config)?;
@@ -313,7 +311,7 @@ fn write_private_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     let file_name = path
         .file_name()
         .and_then(|name| name.to_str())
-        .unwrap_or("mail-client");
+        .unwrap_or("email");
     let tmp = parent.join(format!(".{file_name}.tmp.{}", std::process::id()));
 
     let result = (|| -> Result<()> {
