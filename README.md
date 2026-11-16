@@ -1,4 +1,4 @@
-# Email
+# email
 
 ![email in a terminal](preview.png)
 
