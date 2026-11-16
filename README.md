@@ -1,19 +1,8 @@
 # email
 
+An email client for IMAP and SMTP in the terminal.
+
 ![email in a terminal](preview.png)
-
-## What it is
-
-A terminal client for standard IMAP and SMTP accounts. It reads, sends, searches,
-and manages mail without a browser or a TUI.
-
-## Why this exists
-
-A browser-based mail client is a separate application inside a browser: a tab, a
-login session, and a mouse-first interface stand between you and a single
-message. Terminal mail has no such layer. It runs in the shell you are already
-using, works over SSH, keeps the keyboard as the primary interface, and exposes
-messages to scripts instead of only through a web UI.
 
 ## How it works
 
