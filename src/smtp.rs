@@ -259,6 +259,7 @@ mod tests {
             body: "hello".to_string(),
             html: false,
             attachments: Vec::new(),
+            raw_attachments: Vec::new(),
             in_reply_to: None,
             references: None,
         };

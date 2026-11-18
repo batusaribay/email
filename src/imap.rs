@@ -9,7 +9,7 @@ use mail_parser::{Address, MessageParser, MimeHeaders};
 use native_tls::TlsConnector;
 
 use crate::config::{Account, TlsMode};
-use crate::mime::strip_html;
+use crate::mime::{RawAttachment, strip_html};
 use crate::model::{Attachment, Folder, MessageSummary, ParsedMessage};
 use crate::presets::Preset;
 
@@ -39,6 +39,12 @@ pub struct TestResult {
     pub unread: u32,
     pub folders: usize,
     pub uidplus: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ForwardedMessage {
+    pub message: ParsedMessage,
+    pub attachments: Vec<RawAttachment>,
 }
 
 pub async fn test(account: &Account, password: &str) -> Result<TestResult> {
@@ -151,6 +157,56 @@ pub async fn fetch_raw(
             }
         }
         Ok(bytes)
+    })
+    .await
+}
+
+pub async fn fetch_forward_messages(
+    account: &Account,
+    password: &str,
+    mailbox: &str,
+    uids: &[u32],
+    mark_seen: bool,
+) -> Result<Vec<ForwardedMessage>> {
+    if uids.is_empty() {
+        bail!("no message UIDs provided");
+    }
+    let account = account.clone();
+    let password = password.to_string();
+    let mailbox = mailbox.to_string();
+    let uids = uids.to_vec();
+    run_imap(account, password, move |session, _account| {
+        session.select(&mailbox)?;
+        let set = uid_set(&uids);
+        let fetches = session.uid_fetch(&set, FULL_FETCH)?;
+        let mut messages = Vec::with_capacity(uids.len());
+        for uid in &uids {
+            let fetch = fetches
+                .iter()
+                .find(|fetch| fetch.uid == Some(*uid))
+                .ok_or_else(|| anyhow::anyhow!("message {uid} was not found in {mailbox}"))?;
+            let raw = fetch
+                .body()
+                .ok_or_else(|| anyhow::anyhow!("message {uid} has no body"))?;
+            let parsed = MessageParser::default()
+                .parse(raw)
+                .ok_or_else(|| anyhow::anyhow!("could not parse message {uid}"))?;
+            let attachments = parsed
+                .attachments()
+                .enumerate()
+                .map(|(index, part)| raw_attachment_from_part(part, index + 1))
+                .collect();
+            messages.push(ForwardedMessage {
+                message: parse_full(fetch, *uid, &mailbox)?,
+                attachments,
+            });
+        }
+        if mark_seen {
+            if let Err(error) = session.uid_store(&set, "+FLAGS.SILENT (\\Seen)") {
+                eprintln!("warning: could not mark forwarded messages as read: {error}");
+            }
+        }
+        Ok(messages)
     })
     .await
 }
@@ -674,24 +730,36 @@ fn extract_body(parsed: &mail_parser::Message<'_>) -> (String, Option<String>) {
 }
 
 fn attachment_from_part(part: &mail_parser::MessagePart<'_>, index: usize) -> Attachment {
-    let filename = part
-        .attachment_name()
+    Attachment {
+        index,
+        filename: attachment_filename(part, index),
+        mime_type: attachment_mime_type(part),
+        size: part.len() as u64,
+    }
+}
+
+fn raw_attachment_from_part(part: &mail_parser::MessagePart<'_>, index: usize) -> RawAttachment {
+    RawAttachment {
+        filename: attachment_filename(part, index),
+        mime_type: attachment_mime_type(part),
+        bytes: part.contents().to_vec(),
+    }
+}
+
+fn attachment_filename(part: &mail_parser::MessagePart<'_>, index: usize) -> String {
+    part.attachment_name()
         .map(ToOwned::to_owned)
         .filter(|name| !name.trim().is_empty())
-        .unwrap_or_else(|| format!("attachment-{index}"));
-    let mime_type = part
-        .content_type()
+        .unwrap_or_else(|| format!("attachment-{index}"))
+}
+
+fn attachment_mime_type(part: &mail_parser::MessagePart<'_>) -> String {
+    part.content_type()
         .map(|content_type| {
             let subtype = content_type.c_subtype.as_deref().unwrap_or("octet-stream");
             format!("{}/{subtype}", content_type.c_type)
         })
-        .unwrap_or_else(|| "application/octet-stream".to_string());
-    Attachment {
-        index,
-        filename,
-        mime_type,
-        size: part.len() as u64,
-    }
+        .unwrap_or_else(|| "application/octet-stream".to_string())
 }
 
 fn flags_from_fetch(fetch: &Fetch) -> Vec<String> {
@@ -1305,6 +1373,21 @@ mod tests {
         assert_eq!(result.messages[0].subject, "Test");
         assert_eq!(result.messages[0].from, "Alice <alice@example.com>");
         assert!(!result.messages[0].unread);
+    }
+
+    #[tokio::test]
+    async fn collects_forwarded_messages_and_attachments() {
+        let (port, server) = start_mock_imap(true);
+        let account = mock_account(port);
+        let messages = fetch_forward_messages(&account, "secret", "INBOX", &[42], false)
+            .await
+            .unwrap();
+        server.join().unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].message.subject, "Test");
+        assert_eq!(messages[0].attachments.len(), 1);
+        assert_eq!(messages[0].attachments[0].filename, "note.txt");
+        assert_eq!(messages[0].attachments[0].bytes, b"attachment body");
     }
 
     #[tokio::test]

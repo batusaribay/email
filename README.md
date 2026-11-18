@@ -50,6 +50,7 @@ Protection is enabled, or a Workspace administrator disabled app passwords.
 | `email read` | Read a message and list attachments |
 | `email send` | Send mail, with HTML and attachments |
 | `email reply` | Reply or reply-all |
+| `email forward` | Forward one or more messages |
 | `email attachments` | List attachment numbers |
 | `email attachment` | Download one attachment |
 | `email folders` | List, create, rename, or delete folders |
@@ -78,7 +79,14 @@ email attachment 4821 1 --output ~/Downloads/invoice.pdf
 
 email send --to alice@example.com -s 'Hello' -b 'From the terminal.'
 email reply 4821 --all -b 'Sounds good.'
+
+email forward 4821 --to alice@example.com
+email forward 4821 4822 4823 --to alice@example.com -b 'FYI'
+email forward 4821,4822 --to alice@example.com --subject 'Two messages'
 ```
+
+Forwarding sends one email containing every selected message, and keeps the
+original attachments.
 
 Multiple UIDs can be passed with spaces or commas:
 

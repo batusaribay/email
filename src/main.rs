@@ -19,8 +19,8 @@ use tokio::io::AsyncReadExt;
 
 use crate::cli::{
     AccountCommand, AddAccountArgs, AttachmentArgs, AttachmentsArgs, Cli, Command, FolderCommand,
-    IdsArgs, ListArgs, MarkArgs, MoveArgs, OutputFormat, ReadArgs, ReadFormat, ReplyArgs,
-    SearchArgs, SendArgs,
+    ForwardArgs, IdsArgs, ListArgs, MarkArgs, MoveArgs, OutputFormat, ReadArgs, ReadFormat,
+    ReplyArgs, SearchArgs, SendArgs,
 };
 use crate::config::{
     Account, Config, Mailboxes, Server, config_path, expand_tilde, load_config, resolve_config_dir,
@@ -86,6 +86,7 @@ async fn run() -> Result<()> {
                 }
                 Command::Read(args) => read_message(&account, &password, args, inbox).await,
                 Command::Reply(args) => reply_message(&account, &password, args, inbox).await,
+                Command::Forward(args) => forward_messages(&account, &password, args, inbox).await,
                 Command::Attachments(args) => attachments(&account, &password, args, inbox).await,
                 Command::Attachment(args) => {
                     download_attachment(&account, &password, args, inbox).await
@@ -565,6 +566,7 @@ async fn send_message(account: &Account, password: Option<&str>, args: SendArgs)
         body,
         html: args.html,
         attachments,
+        raw_attachments: Vec::new(),
         in_reply_to: None,
         references: None,
     };
@@ -653,8 +655,59 @@ async fn reply_message(
         body,
         html: args.html,
         attachments,
+        raw_attachments: Vec::new(),
         in_reply_to,
         references,
+    };
+    let built = mime::build_message(&outgoing)?;
+    if args.dry_run {
+        return write_stdout(&built.bytes);
+    }
+    let result = smtp::send(account, password, &outgoing, &built).await?;
+    render::print_send(&result, args.format)
+}
+
+async fn forward_messages(
+    account: &Account,
+    password: &str,
+    args: ForwardArgs,
+    inbox: String,
+) -> Result<()> {
+    let mailbox = args
+        .mailbox
+        .or_else(|| account.last_mailbox.clone())
+        .unwrap_or(inbox);
+    let mark_seen = !args.no_mark_read && !args.dry_run;
+    let messages =
+        imap::fetch_forward_messages(account, password, &mailbox, &args.uids, mark_seen).await?;
+    let subject = args.subject.unwrap_or_else(|| {
+        forward_subject(
+            messages
+                .first()
+                .map(|forwarded| forwarded.message.subject.as_str())
+                .unwrap_or(""),
+            messages.len(),
+        )
+    });
+    let note = resolve_forward_body(args.body.as_deref(), args.body_file.as_deref()).await?;
+    let body = forward_body(&note, &messages);
+    let raw_attachments = messages
+        .iter()
+        .flat_map(|forwarded| forwarded.attachments.iter().cloned())
+        .collect();
+    let outgoing = OutgoingMessage {
+        from_name: account.display_name.clone(),
+        from_email: account.email.clone(),
+        to: args.to,
+        cc: None,
+        bcc: None,
+        subject,
+        body,
+        html: false,
+        attachments: Vec::new(),
+        raw_attachments,
+        in_reply_to: None,
+        references: None,
     };
     let built = mime::build_message(&outgoing)?;
     if args.dry_run {
@@ -854,6 +907,72 @@ async fn read_stdin() -> Result<String> {
     Ok(body)
 }
 
+async fn resolve_forward_body(body: Option<&str>, body_file: Option<&str>) -> Result<String> {
+    if body.is_some() || body_file.is_some() {
+        return resolve_body(body, body_file).await;
+    }
+    if !std::io::stdin().is_terminal() {
+        return read_stdin().await;
+    }
+    Ok(String::new())
+}
+
+fn forward_subject(subject: &str, count: usize) -> String {
+    if count != 1 {
+        return format!("Fwd: {count} messages");
+    }
+    let subject = subject.trim();
+    let lower = subject.to_ascii_lowercase();
+    if lower.starts_with("fwd:") || lower.starts_with("fw:") {
+        subject.to_string()
+    } else if subject.is_empty() {
+        "Fwd: (no subject)".to_string()
+    } else {
+        format!("Fwd: {subject}")
+    }
+}
+
+fn forward_body(note: &str, messages: &[imap::ForwardedMessage]) -> String {
+    let mut body = String::new();
+    let note = note.trim_end();
+    if !note.is_empty() {
+        body.push_str(note);
+        body.push_str("\n\n");
+    }
+    for (index, forwarded) in messages.iter().enumerate() {
+        if index > 0 {
+            body.push('\n');
+        }
+        let message = &forwarded.message;
+        body.push_str("---------- Forwarded message ----------\n");
+        body.push_str(&format!("From: {}\n", message.from));
+        body.push_str(&format!("Date: {}\n", message.date));
+        body.push_str(&format!("Subject: {}\n", message.subject));
+        body.push_str(&format!("To: {}\n", message.to));
+        if !message.cc.trim().is_empty() {
+            body.push_str(&format!("Cc: {}\n", message.cc));
+        }
+        if !forwarded.attachments.is_empty() {
+            let names = forwarded
+                .attachments
+                .iter()
+                .map(|attachment| attachment.filename.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            body.push_str(&format!("Attachments: {names}\n"));
+        }
+        body.push('\n');
+        let text = message.body_text.trim_end();
+        if text.is_empty() {
+            body.push_str("(no text body)\n");
+        } else {
+            body.push_str(text);
+            body.push('\n');
+        }
+    }
+    body.trim_end().to_string() + "\n"
+}
+
 fn expand_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
     paths.into_iter().map(|path| expand_tilde(&path)).collect()
 }
@@ -944,6 +1063,15 @@ mod tests {
         let values = split_addresses("\"Doe, Jane\" <jane@example.com>, bob@example.com");
         assert_eq!(values.len(), 2);
         assert_eq!(extract_email(&values[0]), "jane@example.com");
+    }
+
+    #[test]
+    fn forward_subject_uses_a_single_prefix() {
+        assert_eq!(forward_subject("Hello", 1), "Fwd: Hello");
+        assert_eq!(forward_subject("Fwd: Hello", 1), "Fwd: Hello");
+        assert_eq!(forward_subject("FW: Hello", 1), "FW: Hello");
+        assert_eq!(forward_subject("", 1), "Fwd: (no subject)");
+        assert_eq!(forward_subject("Hello", 3), "Fwd: 3 messages");
     }
 
     #[test]

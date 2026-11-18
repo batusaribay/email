@@ -7,6 +7,13 @@ use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use rand::RngCore;
 
 #[derive(Debug, Clone)]
+pub struct RawAttachment {
+    pub filename: String,
+    pub mime_type: String,
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
 pub struct OutgoingMessage {
     pub from_name: String,
     pub from_email: String,
@@ -17,6 +24,7 @@ pub struct OutgoingMessage {
     pub body: String,
     pub html: bool,
     pub attachments: Vec<PathBuf>,
+    pub raw_attachments: Vec<RawAttachment>,
     pub in_reply_to: Option<String>,
     pub references: Option<String>,
 }
@@ -91,7 +99,7 @@ pub fn build_message(message: &OutgoingMessage) -> Result<BuiltMessage> {
 
     let body = body_entity(&message.body, message.html);
     let mut output = Vec::new();
-    if message.attachments.is_empty() {
+    if message.attachments.is_empty() && message.raw_attachments.is_empty() {
         output.extend_from_slice(headers.as_bytes());
         output.extend_from_slice(body.as_bytes());
     } else {
@@ -106,6 +114,10 @@ pub fn build_message(message: &OutgoingMessage) -> Result<BuiltMessage> {
             let attachment = attachment_entity(path)?;
             output.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
             output.extend_from_slice(attachment.as_bytes());
+        }
+        for attachment in &message.raw_attachments {
+            output.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+            output.extend_from_slice(raw_attachment_entity(attachment).as_bytes());
         }
         output.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
     }
@@ -141,6 +153,37 @@ fn attachment_entity(path: &Path) -> Result<String> {
         filename_param(&filename, "filename"),
         base64_wrapped(&bytes)
     ))
+}
+
+fn raw_attachment_entity(attachment: &RawAttachment) -> String {
+    let filename = attachment
+        .filename
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or("attachment")
+        .trim()
+        .replace(['\r', '\n'], " ");
+    let filename = if filename.is_empty() {
+        "attachment".to_string()
+    } else {
+        filename
+    };
+    let mime = if attachment.mime_type.chars().all(|character| {
+        character.is_ascii_alphanumeric() || matches!(character, '/' | '-' | '+' | '.')
+    }) && !attachment.mime_type.is_empty()
+    {
+        attachment.mime_type.as_str()
+    } else {
+        "application/octet-stream"
+    };
+    format!(
+        "Content-Type: {mime}; {}\r\n\
+         Content-Transfer-Encoding: base64\r\n\
+         Content-Disposition: attachment; {}\r\n\r\n{}",
+        filename_param(&filename, "name"),
+        filename_param(&filename, "filename"),
+        base64_wrapped(&attachment.bytes)
+    )
 }
 
 fn encode_address_header(value: &str) -> String {
@@ -523,6 +566,7 @@ mod tests {
             body: "Hello\nworld".to_string(),
             html: false,
             attachments,
+            raw_attachments: Vec::new(),
             in_reply_to: Some("<abc@example.com>".to_string()),
             references: Some("<abc@example.com>".to_string()),
         }
@@ -555,6 +599,20 @@ mod tests {
         assert!(raw.contains("Content-Type: application/toml; name=\"email-test-"));
         assert!(!raw.contains("name=name="));
         assert!(raw.contains("Content-Disposition: attachment; filename=\"email-test-"));
+    }
+
+    #[test]
+    fn builds_raw_attachment_message() {
+        let mut message = sample(Vec::new());
+        message.raw_attachments.push(RawAttachment {
+            filename: "forwarded.txt".to_string(),
+            mime_type: "text/plain".to_string(),
+            bytes: b"forwarded body".to_vec(),
+        });
+        let raw = String::from_utf8(build_message(&message).unwrap().bytes).unwrap();
+        assert!(raw.contains("Content-Type: multipart/mixed; boundary=\""));
+        assert!(raw.contains("Content-Type: text/plain; name=\"forwarded.txt\""));
+        assert!(raw.contains("Content-Disposition: attachment; filename=\"forwarded.txt\""));
     }
 
     #[test]

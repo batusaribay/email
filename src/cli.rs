@@ -57,6 +57,9 @@ pub enum Command {
     /// Reply to a message.
     Reply(ReplyArgs),
 
+    /// Forward one or more messages.
+    Forward(ForwardArgs),
+
     /// List attachments on a message.
     #[command(alias = "files")]
     Attachments(AttachmentsArgs),
@@ -384,6 +387,45 @@ pub struct ReplyArgs {
     /// Attach a file (repeatable).
     #[arg(short = 'a', long, value_name = "FILE")]
     pub attach: Vec<PathBuf>,
+
+    /// Print the generated MIME message instead of sending it.
+    #[arg(long)]
+    pub dry_run: bool,
+
+    /// Output format for the result.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct ForwardArgs {
+    /// Message UIDs (space or comma separated).
+    #[arg(required = true, num_args = 1.., value_delimiter = ',', value_name = "UID")]
+    pub uids: Vec<u32>,
+
+    /// Recipient(s), comma separated.
+    #[arg(short = 't', long, value_name = "ADDRESSES")]
+    pub to: String,
+
+    /// Mailbox containing the messages (defaults to the last list/search mailbox, then INBOX).
+    #[arg(short = 'm', long, value_name = "MAILBOX")]
+    pub mailbox: Option<String>,
+
+    /// Override the generated subject.
+    #[arg(short = 's', long, value_name = "SUBJECT")]
+    pub subject: Option<String>,
+
+    /// Note to put above the forwarded messages.
+    #[arg(short = 'b', long, value_name = "TEXT", conflicts_with = "body_file")]
+    pub body: Option<String>,
+
+    /// Read the note from a file; use '-' for standard input.
+    #[arg(long, value_name = "FILE", conflicts_with = "body")]
+    pub body_file: Option<String>,
+
+    /// Do not mark the original messages as read.
+    #[arg(long)]
+    pub no_mark_read: bool,
 
     /// Print the generated MIME message instead of sending it.
     #[arg(long)]
