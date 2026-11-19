@@ -153,7 +153,10 @@ pub fn print_attachments(message: &ParsedMessage, format: OutputFormat) -> Resul
             for attachment in &message.attachments {
                 println!(
                     "{}\t{}\t{}\t{}",
-                    attachment.index, attachment.filename, attachment.size, attachment.mime_type
+                    attachment.index,
+                    cell(&attachment.filename),
+                    attachment.size,
+                    cell(&attachment.mime_type)
                 );
             }
             Ok(())
@@ -188,9 +191,9 @@ pub fn print_folders(folders: &[Folder], format: OutputFormat) -> Result<()> {
             for folder in folders {
                 println!(
                     "{}\t{}\t{}\t{}",
-                    folder.name,
-                    folder.delimiter.as_deref().unwrap_or(""),
-                    folder.attributes.join(","),
+                    cell(&folder.name),
+                    folder.delimiter.as_deref().map(cell).unwrap_or_default(),
+                    cell(&folder.attributes.join(",")),
                     folder.selectable
                 );
             }
@@ -252,10 +255,10 @@ pub fn print_accounts(config: &Config, format: OutputFormat) -> Result<()> {
             for view in &views {
                 println!(
                     "{}\t{}\t{}\t{}\t{}\t{}",
-                    view.email,
-                    view.preset,
-                    view.imap,
-                    view.smtp,
+                    cell(view.email),
+                    cell(view.preset),
+                    cell(&view.imap),
+                    cell(&view.smtp),
                     view.password_saved,
                     view.default
                 );
@@ -315,7 +318,11 @@ pub fn print_test(
             if format == OutputFormat::Plain {
                 println!(
                     "{}\t{}\t{}\t{}\t{}",
-                    account.email, imap.mailbox, imap.messages, imap.unread, smtp_ok
+                    cell(&account.email),
+                    cell(&imap.mailbox),
+                    imap.messages,
+                    imap.unread,
+                    smtp_ok
                 );
             } else {
                 println!("Account: {}", account.email);
@@ -339,9 +346,9 @@ pub fn print_send(result: &SendResult, format: OutputFormat) -> Result<()> {
         OutputFormat::Plain => {
             println!(
                 "{}\t{}\t{}",
-                result.message_id,
-                result.from,
-                result.recipients.join(",")
+                cell(&result.message_id),
+                cell(&result.from),
+                cell(&result.recipients.join(","))
             );
             Ok(())
         }
