@@ -2,8 +2,8 @@
 name = "email"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
-description = "A Rust CLI email client for IMAP and SMTP"
+rust-version = "1.88"
+description = "A Rust CLI for email over IMAP and SMTP"
 license = "MIT"
 repository = "https://github.com/batusaribay/email"
 publish = false
