@@ -27,6 +27,16 @@ pub struct Cli {
     #[arg(long, global = true, env = "EMAIL_ACCOUNT", value_name = "EMAIL")]
     pub account: Option<String>,
 
+    /// Color output: auto, always, or never
+    #[arg(
+        long,
+        global = true,
+        value_enum,
+        default_value = "auto",
+        value_name = "WHEN"
+    )]
+    pub color: crate::theme::ColorMode,
+
     #[command(subcommand)]
     pub command: Command,
 }

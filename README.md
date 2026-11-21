@@ -48,6 +48,7 @@ Commands:
 Options:
       --config-dir <DIR>  Configuration directory
       --account <EMAIL>   Account email to use
+      --color <WHEN>      Color output: auto, always, or never [default: auto]
   -h, --help              Print help
   -V, --version           Print version
 ```
@@ -83,6 +84,12 @@ and attachment filenames are sanitized before use as local paths.
 Text output strips terminal control characters. There is no telemetry,
 analytics, or background polling. An app password grants full mailbox access,
 so revoke it at the provider if a machine is lost.
+
+Color uses the terminal palette and ANSI attributes only. Message bodies and
+data rows inherit the terminal foreground, while table headers, labels, success,
+and failure lines use semantic roles. `--color never`, `NO_COLOR`, `CLICOLOR=0`,
+`TERM=dumb`, and non-terminal output all disable it. JSON and plain output are
+never colored.
 
 ## Install
 

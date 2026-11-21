@@ -5,6 +5,7 @@ use crate::cli::OutputFormat;
 use crate::config::{Account, Config, Mailboxes};
 use crate::imap::TestResult;
 use crate::model::{Attachment, Folder, MessageSummary, ParsedMessage, SendResult};
+use crate::theme::{Role, current};
 
 pub fn print_page(mailbox: &str, messages: &[MessageSummary], format: OutputFormat) -> Result<()> {
     match format {
@@ -34,7 +35,7 @@ pub fn print_page(mailbox: &str, messages: &[MessageSummary], format: OutputForm
         }
         OutputFormat::Table => {
             if messages.is_empty() {
-                println!("No messages.");
+                println!("{}", current().paint(Role::Muted, "No messages."));
             } else {
                 let rows: Vec<Vec<String>> = messages
                     .iter()
@@ -84,25 +85,54 @@ pub fn print_message(
 }
 
 fn print_message_text(message: &ParsedMessage, html: bool, headers_only: bool) {
+    let theme = current();
     if !message.from.is_empty() {
-        println!("From:    {}", cell(&message.from));
+        println!(
+            "{} {}",
+            theme.paint(Role::Muted, "From:   "),
+            cell(&message.from)
+        );
     }
     if !message.to.is_empty() {
-        println!("To:      {}", cell(&message.to));
+        println!(
+            "{} {}",
+            theme.paint(Role::Muted, "To:     "),
+            cell(&message.to)
+        );
     }
     if !message.cc.is_empty() {
-        println!("Cc:      {}", cell(&message.cc));
+        println!(
+            "{} {}",
+            theme.paint(Role::Muted, "Cc:     "),
+            cell(&message.cc)
+        );
     }
     if !message.bcc.is_empty() {
-        println!("Bcc:     {}", cell(&message.bcc));
+        println!(
+            "{} {}",
+            theme.paint(Role::Muted, "Bcc:    "),
+            cell(&message.bcc)
+        );
     }
     if !message.reply_to.is_empty() {
-        println!("Reply-To: {}", cell(&message.reply_to));
+        println!(
+            "{} {}",
+            theme.paint(Role::Muted, "Reply-To:"),
+            cell(&message.reply_to)
+        );
     }
-    println!("Date:    {}", cell(&message.date));
-    println!("Subject: {}", cell(&message.subject));
+    println!(
+        "{} {}",
+        theme.paint(Role::Muted, "Date:   "),
+        cell(&message.date)
+    );
+    println!(
+        "{} {}",
+        theme.paint(Role::Muted, "Subject:"),
+        theme.paint(Role::Bold, &cell(&message.subject))
+    );
     if !message.attachments.is_empty() {
-        println!("Attachments:");
+        println!("{}", theme.paint(Role::Muted, "Attachments:"));
         for attachment in &message.attachments {
             println!(
                 "  {}. {} ({}, {})",
@@ -124,7 +154,7 @@ fn print_message_text(message: &ParsedMessage, html: bool, headers_only: bool) {
     };
     let body = sanitize_text(body);
     if body.trim().is_empty() {
-        println!("(no body)");
+        println!("{}", current().paint(Role::Muted, "(no body)"));
     } else {
         print!("{body}");
         if !body.ends_with('\n') {
@@ -163,7 +193,7 @@ pub fn print_attachments(message: &ParsedMessage, format: OutputFormat) -> Resul
         }
         OutputFormat::Table => {
             if message.attachments.is_empty() {
-                println!("No attachments.");
+                println!("{}", current().paint(Role::Muted, "No attachments."));
             } else {
                 let rows: Vec<Vec<String>> = message
                     .attachments
@@ -201,7 +231,7 @@ pub fn print_folders(folders: &[Folder], format: OutputFormat) -> Result<()> {
         }
         OutputFormat::Table => {
             if folders.is_empty() {
-                println!("No folders found.");
+                println!("{}", current().paint(Role::Muted, "No folders found."));
             } else {
                 let rows: Vec<Vec<String>> = folders
                     .iter()
@@ -268,7 +298,11 @@ pub fn print_accounts(config: &Config, format: OutputFormat) -> Result<()> {
         OutputFormat::Table => {
             if views.is_empty() {
                 println!(
-                    "No accounts configured. Run `email account add --email you@example.com`."
+                    "{}",
+                    current().paint(
+                        Role::Muted,
+                        "No accounts configured. Run `email account add --email you@example.com`.",
+                    )
                 );
             } else {
                 let rows: Vec<Vec<String>> = views
@@ -325,14 +359,23 @@ pub fn print_test(
                     smtp_ok
                 );
             } else {
-                println!("Account: {}", account.email);
+                let theme = current();
+                println!("{} {}", theme.paint(Role::Muted, "Account:"), account.email);
                 println!(
-                    "IMAP:    ok ({} messages, {} unread, {} folders)",
-                    imap.messages, imap.unread, imap.folders
+                    "{} ok ({} messages, {} unread, {} folders)",
+                    theme.paint(Role::Success, "IMAP:"),
+                    imap.messages,
+                    imap.unread,
+                    imap.folders
                 );
                 println!(
-                    "SMTP:    {}",
-                    if smtp_ok { "ok" } else { "connection failed" }
+                    "{} {}",
+                    theme.paint(Role::Muted, "SMTP:"),
+                    if smtp_ok {
+                        theme.paint(Role::Success, "ok")
+                    } else {
+                        theme.paint(Role::Error, "connection failed")
+                    }
                 );
             }
             Ok(())
@@ -354,7 +397,8 @@ pub fn print_send(result: &SendResult, format: OutputFormat) -> Result<()> {
         }
         OutputFormat::Table => {
             println!(
-                "Sent {} to {} recipient{}.",
+                "{} {} to {} recipient{}.",
+                current().paint(Role::Success, "Sent"),
                 result.message_id,
                 result.recipients.len(),
                 if result.recipients.len() == 1 {
@@ -369,7 +413,11 @@ pub fn print_send(result: &SendResult, format: OutputFormat) -> Result<()> {
 }
 
 pub fn print_saved_file(path: &str, bytes: u64) {
-    println!("Saved {path} ({})", size(bytes));
+    println!(
+        "{} {path} ({})",
+        current().paint(Role::Success, "Saved"),
+        size(bytes)
+    );
 }
 
 fn print_json<T: Serialize + ?Sized>(value: &T) -> Result<()> {
@@ -402,6 +450,10 @@ fn print_table(headers: &[&str], rows: &[Vec<String>], max_widths: &[usize]) {
         .iter()
         .enumerate()
         .map(|(index, header)| pad(header, widths[index]))
+        .collect();
+    let header_cells: Vec<String> = header_cells
+        .iter()
+        .map(|cell| current().paint(Role::Heading, cell))
         .collect();
     println!("{}", header_cells.join("  "));
     for row in rows {

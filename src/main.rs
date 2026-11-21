@@ -7,6 +7,7 @@ mod presets;
 mod render;
 mod secrets;
 mod smtp;
+mod theme;
 
 use std::collections::HashSet;
 use std::env;
@@ -41,6 +42,7 @@ async fn main() {
 
 async fn run() -> Result<()> {
     let cli = parse_cli();
+    crate::theme::init(cli.color);
     let config_dir = resolve_config_dir(cli.config_dir.as_deref())?;
     let mut config = load_config(&config_dir)?;
     migrate_legacy_passwords(&config_dir, &mut config)?;
