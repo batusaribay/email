@@ -41,6 +41,11 @@ async fn main() {
 }
 
 async fn run() -> Result<()> {
+    if env::args_os().len() == 1 {
+        print_help()?;
+        return Ok(());
+    }
+
     let cli = parse_cli();
     crate::theme::init(cli.color);
     let config_dir = resolve_config_dir(cli.config_dir.as_deref())?;
@@ -110,6 +115,15 @@ fn parse_cli() -> Cli {
         .color(clap::ColorChoice::Never);
     let matches = command.get_matches();
     Cli::from_arg_matches(&matches).unwrap_or_else(|error| error.exit())
+}
+
+fn print_help() -> std::io::Result<()> {
+    let mut command = Cli::command()
+        .styles(clap::builder::Styles::plain())
+        .color(clap::ColorChoice::Never);
+    command.print_help()?;
+    println!();
+    Ok(())
 }
 
 fn migrate_legacy_passwords(config_dir: &Path, config: &mut Config) -> Result<()> {

@@ -15,8 +15,7 @@ use crate::config::TlsMode;
     version,
     about = "A Rust CLI for email over IMAP and SMTP",
     long_about = None,
-    propagate_version = true,
-    arg_required_else_help = true
+    propagate_version = true
 )]
 pub struct Cli {
     /// Configuration directory (defaults to $XDG_CONFIG_HOME/email).
