@@ -53,8 +53,6 @@ Options:
   -V, --version           Print version
 ```
 
-Typical calls:
-
 ```bash
 email list -n 20
 email search 'from:alice has:attachment'
