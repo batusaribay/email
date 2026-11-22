@@ -348,6 +348,10 @@ pub struct SendArgs {
     #[arg(long, value_name = "FILE", conflicts_with = "body")]
     pub body_file: Option<String>,
 
+    /// Open $VISUAL or $EDITOR to write the message body.
+    #[arg(short = 'e', long, conflicts_with_all = ["body", "body_file"])]
+    pub editor: bool,
+
     /// Treat the body as HTML.
     #[arg(long)]
     pub html: bool,
@@ -389,6 +393,10 @@ pub struct ReplyArgs {
     /// Read the message body from a file; use '-' for standard input.
     #[arg(long, value_name = "FILE", conflicts_with = "body")]
     pub body_file: Option<String>,
+
+    /// Open $VISUAL or $EDITOR to write the message body.
+    #[arg(short = 'e', long, conflicts_with_all = ["body", "body_file"])]
+    pub editor: bool,
 
     /// Treat the body as HTML.
     #[arg(long)]
@@ -432,6 +440,10 @@ pub struct ForwardArgs {
     /// Read the note from a file; use '-' for standard input.
     #[arg(long, value_name = "FILE", conflicts_with = "body")]
     pub body_file: Option<String>,
+
+    /// Open $VISUAL or $EDITOR to write the note.
+    #[arg(short = 'e', long, conflicts_with_all = ["body", "body_file"])]
+    pub editor: bool,
 
     /// Do not mark the original messages as read.
     #[arg(long)]

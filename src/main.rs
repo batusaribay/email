@@ -556,7 +556,7 @@ async fn read_message(
 }
 
 async fn send_message(account: &Account, password: Option<&str>, args: SendArgs) -> Result<()> {
-    let body = resolve_body(args.body.as_deref(), args.body_file.as_deref()).await?;
+    let body = resolve_body(args.body.as_deref(), args.body_file.as_deref(), args.editor).await?;
     let attachments = expand_paths(args.attach);
     let message = OutgoingMessage {
         from_name: account.display_name.clone(),
@@ -645,7 +645,7 @@ async fn reply_message(
         _ => None,
     };
     let in_reply_to = original.message_id.clone();
-    let body = resolve_body(args.body.as_deref(), args.body_file.as_deref()).await?;
+    let body = resolve_body(args.body.as_deref(), args.body_file.as_deref(), args.editor).await?;
     let attachments = expand_paths(args.attach);
     let outgoing = OutgoingMessage {
         from_name: account.display_name.clone(),
@@ -691,7 +691,8 @@ async fn forward_messages(
             messages.len(),
         )
     });
-    let note = resolve_forward_body(args.body.as_deref(), args.body_file.as_deref()).await?;
+    let note =
+        resolve_forward_body(args.body.as_deref(), args.body_file.as_deref(), args.editor).await?;
     let body = forward_body(&note, &messages);
     let raw_attachments = messages
         .iter()
@@ -874,7 +875,126 @@ fn output_for_read(format: ReadFormat) -> OutputFormat {
     }
 }
 
-async fn resolve_body(body: Option<&str>, body_file: Option<&str>) -> Result<String> {
+struct EditorFile {
+    path: PathBuf,
+}
+
+impl EditorFile {
+    fn create() -> Result<Self> {
+        for _ in 0..10 {
+            let path = std::env::temp_dir().join(format!(
+                "email-edit-{}-{:016x}.txt",
+                std::process::id(),
+                rand::random::<u64>()
+            ));
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            match options.open(&path) {
+                Ok(_) => return Ok(Self { path }),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!("could not create editor file {}", path.display())
+                    });
+                }
+            }
+        }
+        bail!("could not create a temporary editor file")
+    }
+}
+
+impl Drop for EditorFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+fn editor_command() -> Result<Vec<String>> {
+    let visual = env::var("VISUAL").ok();
+    let editor = env::var("EDITOR").ok();
+    editor_command_from(visual.as_deref(), editor.as_deref())
+}
+
+fn editor_command_from(visual: Option<&str>, editor: Option<&str>) -> Result<Vec<String>> {
+    for value in [visual, editor].into_iter().flatten() {
+        let parts = split_editor_command(value)?;
+        if !parts.is_empty() {
+            return Ok(parts);
+        }
+    }
+    #[cfg(windows)]
+    {
+        Ok(vec!["notepad".to_string()])
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(vec!["vi".to_string()])
+    }
+}
+
+fn split_editor_command(value: &str) -> Result<Vec<String>> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut quote: Option<char> = None;
+    for character in value.chars() {
+        match character {
+            '\'' | '"' if quote == Some(character) => quote = None,
+            '\'' | '"' if quote.is_none() => quote = Some(character),
+            ' ' | '\t' if quote.is_none() => {
+                if !current.is_empty() {
+                    parts.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(character),
+        }
+    }
+    if quote.is_some() {
+        bail!("unclosed quote in editor command");
+    }
+    if !current.is_empty() {
+        parts.push(current);
+    }
+    Ok(parts)
+}
+
+async fn edit_body() -> Result<String> {
+    let file = EditorFile::create()?;
+    let path = file.path.clone();
+    let editor = editor_command()?;
+    tokio::task::spawn_blocking(move || -> Result<()> {
+        let (program, arguments) = editor
+            .split_first()
+            .context("no editor command configured")?;
+        let status = std::process::Command::new(program)
+            .args(arguments)
+            .arg(&path)
+            .status()
+            .with_context(|| format!("could not run editor '{program}'"))?;
+        if !status.success() {
+            bail!("editor exited with status {}", status.code().unwrap_or(-1));
+        }
+        Ok(())
+    })
+    .await
+    .context("editor task failed")??;
+    tokio::fs::read_to_string(&file.path)
+        .await
+        .with_context(|| format!("could not read editor file {}", file.path.display()))
+}
+
+async fn resolve_body(body: Option<&str>, body_file: Option<&str>, editor: bool) -> Result<String> {
+    if editor {
+        let body = edit_body().await?;
+        if body.trim().is_empty() {
+            bail!("the editor produced an empty message body");
+        }
+        return Ok(body);
+    }
     if let Some(body) = body {
         return Ok(body.to_string());
     }
@@ -895,7 +1015,7 @@ async fn resolve_body(body: Option<&str>, body_file: Option<&str>) -> Result<Str
         return Ok(body);
     }
     bail!(
-        "a message body is required; pass --body TEXT or --body-file FILE \
+        "a message body is required; pass --body TEXT, --body-file FILE, or --editor \
          (use --body-file - or pipe text to stdin)"
     )
 }
@@ -909,9 +1029,16 @@ async fn read_stdin() -> Result<String> {
     Ok(body)
 }
 
-async fn resolve_forward_body(body: Option<&str>, body_file: Option<&str>) -> Result<String> {
+async fn resolve_forward_body(
+    body: Option<&str>,
+    body_file: Option<&str>,
+    editor: bool,
+) -> Result<String> {
+    if editor {
+        return edit_body().await;
+    }
     if body.is_some() || body_file.is_some() {
-        return resolve_body(body, body_file).await;
+        return resolve_body(body, body_file, false).await;
     }
     if !std::io::stdin().is_terminal() {
         return read_stdin().await;
@@ -1065,6 +1192,33 @@ mod tests {
         let values = split_addresses("\"Doe, Jane\" <jane@example.com>, bob@example.com");
         assert_eq!(values.len(), 2);
         assert_eq!(extract_email(&values[0]), "jane@example.com");
+    }
+
+    #[test]
+    fn splits_editor_commands() {
+        assert_eq!(split_editor_command("vim -f").unwrap(), vec!["vim", "-f"]);
+        assert_eq!(
+            split_editor_command("\"/path with space/editor\" --wait").unwrap(),
+            vec!["/path with space/editor", "--wait"]
+        );
+        assert_eq!(
+            split_editor_command("\"C:\\Program Files\\Editor\\editor.exe\" --wait").unwrap(),
+            vec!["C:\\Program Files\\Editor\\editor.exe", "--wait"]
+        );
+        assert!(split_editor_command("'unclosed").is_err());
+        assert!(split_editor_command("   ").unwrap().is_empty());
+    }
+
+    #[test]
+    fn prefers_visual_over_editor() {
+        assert_eq!(
+            editor_command_from(Some("nvim"), Some("vi")).unwrap(),
+            vec!["nvim"]
+        );
+        assert_eq!(
+            editor_command_from(None, Some("vi -f")).unwrap(),
+            vec!["vi", "-f"]
+        );
     }
 
     #[test]

@@ -58,6 +58,7 @@ email list -n 20
 email search 'from:alice has:attachment'
 email read 4821 --format json
 email send --to alice@example.com -s 'Hello' -b 'From the terminal.'
+email send --to alice@example.com -s 'Hello' --editor
 ```
 
 ## Notes
@@ -71,6 +72,10 @@ Multiple UIDs can be passed with spaces or commas, for example
 `email trash 4821 4822 4823`. Forwarding sends one email containing every
 selected message and keeps the original attachments. Gmail searches use
 `[Gmail]/All Mail` unless `--mailbox` says otherwise.
+
+`--editor` opens `$VISUAL` or `$EDITOR` for a multiline body, using a private
+temporary file that is removed after the editor exits. It works with `send`,
+`reply`, and `forward`.
 
 Passwords are stored in the OS keyring, never in `config.json`. The config
 directory is mode `0700` and the file is written atomically with mode `0600`.
