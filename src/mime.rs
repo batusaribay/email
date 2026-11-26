@@ -139,11 +139,11 @@ fn body_entity(body: &str, html: bool) -> String {
 fn attachment_entity(path: &Path) -> Result<String> {
     let bytes =
         std::fs::read(path).with_context(|| format!("could not read {}", path.display()))?;
-    let filename = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("attachment")
-        .replace(['\r', '\n'], " ");
+    let filename = clean_filename(
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("attachment"),
+    );
     let mime = mime_type_for(path);
     Ok(format!(
         "Content-Type: {mime}; {}\r\n\
@@ -155,19 +155,30 @@ fn attachment_entity(path: &Path) -> Result<String> {
     ))
 }
 
-fn raw_attachment_entity(attachment: &RawAttachment) -> String {
-    let filename = attachment
-        .filename
+fn clean_filename(filename: &str) -> String {
+    let filename = filename
         .rsplit(['/', '\\'])
         .next()
         .unwrap_or("attachment")
         .trim()
-        .replace(['\r', '\n'], " ");
-    let filename = if filename.is_empty() {
+        .chars()
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect::<String>();
+    if filename.trim().is_empty() {
         "attachment".to_string()
     } else {
         filename
-    };
+    }
+}
+
+fn raw_attachment_entity(attachment: &RawAttachment) -> String {
+    let filename = clean_filename(&attachment.filename);
     let mime = if attachment.mime_type.chars().all(|character| {
         character.is_ascii_alphanumeric() || matches!(character, '/' | '-' | '+' | '.')
     }) && !attachment.mime_type.is_empty()
@@ -246,7 +257,7 @@ fn filename_param(filename: &str, parameter: &str) -> String {
     if filename.is_ascii()
         && !filename
             .chars()
-            .any(|character| matches!(character, '"' | '\\' | '\r' | '\n'))
+            .any(|character| character.is_control() || matches!(character, '"' | '\\'))
     {
         format!("{parameter}=\"{filename}\"")
     } else {
@@ -382,11 +393,11 @@ pub fn strip_html(html: &str) -> String {
     let mut index = 0;
     while index < bytes.len() {
         if bytes[index] == b'<' {
-            if html[index..].starts_with("<!--") {
-                if let Some(end) = html[index + 4..].find("-->") {
-                    index += 4 + end + 3;
-                    continue;
-                }
+            if html[index..].starts_with("<!--")
+                && let Some(end) = html[index + 4..].find("-->")
+            {
+                index += 4 + end + 3;
+                continue;
             }
             let Some(end) = find_tag_end(&html, index + 1) else {
                 output.push('<');
@@ -413,14 +424,14 @@ pub fn strip_html(html: &str) -> String {
             }
             index = end + 1;
         } else if bytes[index] == b'&' {
-            if let Some(end) = html[index..].find(';') {
-                if end <= 12 {
-                    let entity = &html[index + 1..index + end];
-                    if let Some(character) = decode_entity(entity) {
-                        output.push(character);
-                        index += end + 1;
-                        continue;
-                    }
+            if let Some(end) = html[index..].find(';')
+                && end <= 12
+            {
+                let entity = &html[index + 1..index + end];
+                if let Some(character) = decode_entity(entity) {
+                    output.push(character);
+                    index += end + 1;
+                    continue;
                 }
             }
             output.push('&');
@@ -613,6 +624,21 @@ mod tests {
         assert!(raw.contains("Content-Type: multipart/mixed; boundary=\""));
         assert!(raw.contains("Content-Type: text/plain; name=\"forwarded.txt\""));
         assert!(raw.contains("Content-Disposition: attachment; filename=\"forwarded.txt\""));
+    }
+
+    #[test]
+    fn attachment_filenames_cannot_inject_header_controls() {
+        let mut message = sample(Vec::new());
+        message.raw_attachments.push(RawAttachment {
+            filename: "bad\x00\x1b\r\nname.txt".to_string(),
+            mime_type: "text/plain".to_string(),
+            bytes: Vec::new(),
+        });
+        let raw = String::from_utf8(build_message(&message).unwrap().bytes).unwrap();
+        assert!(!raw.contains('\x00'));
+        assert!(!raw.contains('\x1b'));
+        assert!(!raw.contains("\r\nname.txt"));
+        assert!(raw.contains("bad    name.txt"));
     }
 
     #[test]

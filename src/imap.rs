@@ -120,10 +120,10 @@ pub async fn fetch_message(
             .find(|fetch| fetch.uid == Some(uid))
             .ok_or_else(|| anyhow::anyhow!("message {uid} was not found in {mailbox}"))?;
         let message = parse_full(fetch, uid, &mailbox)?;
-        if mark_seen {
-            if let Err(error) = session.uid_store(&uid.to_string(), "+FLAGS.SILENT (\\Seen)") {
-                eprintln!("warning: could not mark message {uid} as read: {error}");
-            }
+        if mark_seen
+            && let Err(error) = session.uid_store(&uid.to_string(), "+FLAGS.SILENT (\\Seen)")
+        {
+            eprintln!("warning: could not mark message {uid} as read: {error}");
         }
         Ok(message)
     })
@@ -151,10 +151,10 @@ pub async fn fetch_raw(
             .body()
             .map(ToOwned::to_owned)
             .ok_or_else(|| anyhow::anyhow!("message {uid} has no body"))?;
-        if mark_seen {
-            if let Err(error) = session.uid_store(&uid.to_string(), "+FLAGS.SILENT (\\Seen)") {
-                eprintln!("warning: could not mark message {uid} as read: {error}");
-            }
+        if mark_seen
+            && let Err(error) = session.uid_store(&uid.to_string(), "+FLAGS.SILENT (\\Seen)")
+        {
+            eprintln!("warning: could not mark message {uid} as read: {error}");
         }
         Ok(bytes)
     })
@@ -197,14 +197,12 @@ pub async fn fetch_forward_messages(
                 .map(|(index, part)| raw_attachment_from_part(part, index + 1))
                 .collect();
             messages.push(ForwardedMessage {
-                message: parse_full(fetch, *uid, &mailbox)?,
+                message: message_from_parsed(fetch, *uid, &mailbox, &parsed)?,
                 attachments,
             });
         }
-        if mark_seen {
-            if let Err(error) = session.uid_store(&set, "+FLAGS.SILENT (\\Seen)") {
-                eprintln!("warning: could not mark forwarded messages as read: {error}");
-            }
+        if mark_seen && let Err(error) = session.uid_store(&set, "+FLAGS.SILENT (\\Seen)") {
+            eprintln!("warning: could not mark forwarded messages as read: {error}");
         }
         Ok(messages)
     })
@@ -479,6 +477,7 @@ impl ImapSession {
     }
 
     fn select(&mut self, mailbox: &str) -> Result<Mailbox> {
+        validate_mailbox_name(mailbox)?;
         with_session!(self, session => session.select(mailbox))
             .map_err(|error| imap_error("SELECT", error))
     }
@@ -501,6 +500,7 @@ impl ImapSession {
     }
 
     fn uid_copy(&mut self, uids: &str, mailbox: &str) -> Result<()> {
+        validate_mailbox_name(mailbox)?;
         with_session!(self, session => session.uid_copy(uids, mailbox))
             .map_err(|error| imap_error("UID COPY", error))
     }
@@ -663,6 +663,15 @@ fn parse_full(fetch: &Fetch, uid: u32, mailbox: &str) -> Result<ParsedMessage> {
     let parsed = MessageParser::default()
         .parse(raw)
         .ok_or_else(|| anyhow::anyhow!("could not parse message {uid}"))?;
+    message_from_parsed(fetch, uid, mailbox, &parsed)
+}
+
+fn message_from_parsed(
+    fetch: &Fetch,
+    uid: u32,
+    mailbox: &str,
+    parsed: &mail_parser::Message<'_>,
+) -> Result<ParsedMessage> {
     let flags = flags_from_fetch(fetch);
     let unread = !fetch.flags().iter().any(|flag| matches!(flag, Flag::Seen));
     let starred = fetch
@@ -681,7 +690,7 @@ fn parse_full(fetch: &Fetch, uid: u32, mailbox: &str) -> Result<ParsedMessage> {
         .collect();
     let references = normalize_message_ids(&header_text(parsed.references()));
     let in_reply_to = normalize_message_ids(&header_text(parsed.in_reply_to()));
-    let (body_text, body_html) = extract_body(&parsed);
+    let (body_text, body_html) = extract_body(parsed);
     Ok(ParsedMessage {
         uid,
         mailbox: mailbox.to_string(),
@@ -905,14 +914,8 @@ fn parse_imap_date(value: &str) -> Result<String> {
     if let Ok(date) = NaiveDate::parse_from_str(value, "%Y-%m-%d") {
         return Ok(date.format("%d-%b-%Y").to_string());
     }
-    let bytes = value.as_bytes();
-    let looks_like_imap = (9..=11).contains(&bytes.len())
-        && bytes
-            .iter()
-            .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'-')
-        && value.contains('-');
-    if looks_like_imap {
-        return Ok(value.to_string());
+    if let Ok(date) = NaiveDate::parse_from_str(value, "%d-%b-%Y") {
+        return Ok(date.format("%d-%b-%Y").to_string());
     }
     bail!("invalid date '{value}': use YYYY-MM-DD or DD-Mon-YYYY")
 }
@@ -1128,6 +1131,9 @@ mod tests {
         assert_eq!(parse_imap_date("2026-11-14").unwrap(), "14-Nov-2026");
         assert_eq!(parse_imap_date("14-Nov-2026").unwrap(), "14-Nov-2026");
         assert!(parse_imap_date("14/11/2026").is_err());
+        assert!(parse_imap_date("32-Foo-0000").is_err());
+        assert!(validate_mailbox_name("INBOX\r\nNOOP").is_err());
+        assert!(validate_mailbox_name("").is_err());
         assert_eq!(uid_set(&[3, 1, 2]), "3,1,2");
     }
 

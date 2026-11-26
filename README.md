@@ -12,8 +12,9 @@ from a terminal, a pipe, or an agent without a browser.
 
 ## How it works
 
-Accounts live in `~/.config/email/config.json`, while passwords live in the
-operating system's keyring. IMAP handles listing, searching, reading, folders,
+Accounts live in `~/.config/email/config.toml`, while passwords live in the
+operating system's keyring. Existing `config.json` files are migrated
+automatically. IMAP handles listing, searching, reading, folders,
 flags, moves, and trash with TLS verification on by default. `list` and
 `search` remember the mailbox they used, so follow-up commands use the same one.
 Reading marks a message as seen unless `--no-mark-read` is given.
@@ -63,36 +64,14 @@ email send --to alice@example.com -s 'Hello' --editor
 
 ## Notes
 
-Gmail needs an app password. Enable 2-Step Verification, create one at
-`https://myaccount.google.com/apppasswords`, then run
-`email account add --email you@gmail.com`, `email account test`, and
-`email list`. Use the 16-character app password, not the Google password.
+Gmail requires an app password, not the account password. Multiple UIDs can be
+passed with spaces or commas, and `--editor` opens `$VISUAL` or `$EDITOR` for a
+multiline body.
 
-Multiple UIDs can be passed with spaces or commas, for example
-`email trash 4821 4822 4823`. Forwarding sends one email containing every
-selected message and keeps the original attachments. Gmail searches use
-`[Gmail]/All Mail` unless `--mailbox` says otherwise.
+## Config
 
-`--editor` opens `$VISUAL` or `$EDITOR` for a multiline body, using a private
-temporary file that is removed after the editor exits. It works with `send`,
-`reply`, and `forward`.
-
-Passwords are stored in the OS keyring, never in `config.json`. The config
-directory is mode `0700` and the file is written atomically with mode `0600`.
-Old plaintext passwords are migrated on first run. TLS certificates are
-verified; `none` is available only as an explicit choice for local relays. Bcc
-addresses are omitted from headers, outgoing headers are stripped of CR and LF,
-and attachment filenames are sanitized before use as local paths.
-
-Text output strips terminal control characters. There is no telemetry,
-analytics, or background polling. An app password grants full mailbox access,
-so revoke it at the provider if a machine is lost.
-
-Color uses the terminal palette and ANSI attributes only. Message bodies and
-data rows inherit the terminal foreground, while table headers, labels, success,
-and failure lines use semantic roles. `--color never`, `NO_COLOR`, `CLICOLOR=0`,
-`TERM=dumb`, and non-terminal output all disable it. JSON and plain output are
-never colored.
+Accounts are stored in `~/.config/email/config.toml`. Manage them with
+`email account`; passwords stay in the OS keyring.
 
 ## Install
 

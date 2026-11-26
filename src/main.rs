@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::{CommandFactory, FromArgMatches};
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::cli::{
     AccountCommand, AddAccountArgs, AttachmentArgs, AttachmentsArgs, Cli, Command, FolderCommand,
@@ -24,8 +24,8 @@ use crate::cli::{
     ReplyArgs, SearchArgs, SendArgs,
 };
 use crate::config::{
-    Account, Config, Mailboxes, Server, config_path, expand_tilde, load_config, resolve_config_dir,
-    save_config,
+    Account, Config, Mailboxes, Server, config_path, expand_tilde, load_config,
+    migrate_legacy_config, resolve_config_dir, save_config,
 };
 use crate::imap::SearchOptions;
 use crate::mime::OutgoingMessage;
@@ -51,6 +51,9 @@ async fn run() -> Result<()> {
     let config_dir = resolve_config_dir(cli.config_dir.as_deref())?;
     let mut config = load_config(&config_dir)?;
     migrate_legacy_passwords(&config_dir, &mut config)?;
+    if migrate_legacy_config(&config_dir, &config)? {
+        eprintln!("Moved the account configuration to config.toml.");
+    }
     let global_account = cli.account.clone();
 
     match cli.command {
@@ -164,7 +167,7 @@ fn migrate_legacy_passwords(config_dir: &Path, config: &mut Config) -> Result<()
     }
     if migrated > 0 && failed == 0 {
         save_config(config_dir, config)?;
-        eprintln!("Moved {migrated} password(s) from config.json to the OS keyring.");
+        eprintln!("Moved {migrated} password(s) from the configuration file to the OS keyring.");
     }
     Ok(())
 }
@@ -219,10 +222,10 @@ async fn handle_account(
                 .email
                 .clone();
             let removed = config.remove(&selected);
-            if removed.is_some() {
-                if let Err(error) = secrets::delete_password(&selected) {
-                    eprintln!("warning: could not remove the keyring entry: {error:#}");
-                }
+            if removed.is_some()
+                && let Err(error) = secrets::delete_password(&selected)
+            {
+                eprintln!("warning: could not remove the keyring entry: {error:#}");
             }
             save_config(config_dir, config)?;
             if removed.is_some() {
@@ -235,11 +238,16 @@ async fn handle_account(
     }
 }
 
+fn validate_account_email(email: &str) -> Result<()> {
+    email
+        .parse::<lettre::address::Address>()
+        .map(|_| ())
+        .with_context(|| format!("'{email}' is not a valid email address"))
+}
+
 fn add_account(config_dir: &Path, config: &mut Config, args: AddAccountArgs) -> Result<()> {
     let email = args.email.trim().to_string();
-    if !email.contains('@') || email.starts_with('@') || email.ends_with('@') {
-        bail!("'{email}' is not a valid email address");
-    }
+    validate_account_email(&email)?;
     let preset = match args.preset.as_deref() {
         Some(name) => {
             Preset::parse(name).ok_or_else(|| anyhow::anyhow!("unknown preset '{name}'"))?
@@ -321,11 +329,11 @@ fn add_account(config_dir: &Path, config: &mut Config, args: AddAccountArgs) -> 
     }
 
     let mut password_saved = false;
-    if !args.no_save_password {
-        if let Some(password) = password.as_deref() {
-            secrets::store_password(&email, password)?;
-            password_saved = true;
-        }
+    if !args.no_save_password
+        && let Some(password) = password.as_deref()
+    {
+        secrets::store_password(&email, password)?;
+        password_saved = true;
     }
 
     let account = Account {
@@ -380,10 +388,10 @@ fn select_account<'a>(config: &'a Config, selector: Option<&str>) -> Result<&'a 
 }
 
 fn resolve_password(config_dir: &Path, config: &mut Config, account: &Account) -> Result<String> {
-    if let Ok(value) = env::var("EMAIL_PASSWORD") {
-        if !value.is_empty() {
-            return Ok(clean_password(&value, account.is_gmail()));
-        }
+    if let Ok(value) = env::var("EMAIL_PASSWORD")
+        && !value.is_empty()
+    {
+        return Ok(clean_password(&value, account.is_gmail()));
     }
     match secrets::get_password(&account.email) {
         Ok(Some(password)) if !password.is_empty() => {
@@ -399,10 +407,10 @@ fn resolve_password(config_dir: &Path, config: &mut Config, account: &Account) -
             );
         }
     }
-    if let Some(password) = account.password.as_deref() {
-        if !password.is_empty() {
-            return Ok(clean_password(password, account.is_gmail()));
-        }
+    if let Some(password) = account.password.as_deref()
+        && !password.is_empty()
+    {
+        return Ok(clean_password(password, account.is_gmail()));
     }
     if std::io::stdin().is_terminal() {
         let password = clean_password(&prompt_password(&account.email)?, account.is_gmail());
@@ -478,10 +486,8 @@ fn remember_mailbox(config_dir: &Path, config: &mut Config, account: &Account, m
     } else {
         false
     };
-    if changed {
-        if let Err(error) = save_config(config_dir, config) {
-            eprintln!("warning: could not remember the current mailbox: {error:#}");
-        }
+    if changed && let Err(error) = save_config(config_dir, config) {
+        eprintln!("warning: could not remember the current mailbox: {error:#}");
     }
 }
 
@@ -606,7 +612,8 @@ async fn reply_message(
         .mailbox
         .or_else(|| account.last_mailbox.clone())
         .unwrap_or(inbox);
-    let original = imap::fetch_message(account, password, &mailbox, args.uid, true).await?;
+    let mark_seen = should_mark_seen(args.dry_run, false);
+    let original = imap::fetch_message(account, password, &mailbox, args.uid, mark_seen).await?;
     let recipient = if original.reply_to.trim().is_empty() {
         original.from.trim()
     } else {
@@ -693,7 +700,7 @@ async fn forward_messages(
         .mailbox
         .or_else(|| account.last_mailbox.clone())
         .unwrap_or(inbox);
-    let mark_seen = !args.no_mark_read && !args.dry_run;
+    let mark_seen = should_mark_seen(args.dry_run, args.no_mark_read);
     let messages =
         imap::fetch_forward_messages(account, password, &mailbox, &args.uids, mark_seen).await?;
     let subject = args.subject.unwrap_or_else(|| {
@@ -775,19 +782,44 @@ async fn download_attachment(
             .await
             .with_context(|| format!("could not create {}", parent.display()))?;
     }
-    if path.exists() && !args.force {
-        bail!(
-            "{} already exists; pass --force to overwrite it",
-            path.display()
-        );
+    write_attachment(&path, &bytes, args.force).await?;
+    render::print_saved_file(&path.display().to_string(), bytes.len() as u64);
+    Ok(())
+}
+
+async fn write_attachment(path: &Path, bytes: &[u8], force: bool) -> Result<()> {
+    if let Ok(metadata) = tokio::fs::symlink_metadata(path).await {
+        if metadata.file_type().is_symlink() {
+            bail!("refusing to write through symbolic link {}", path.display());
+        }
+        if metadata.is_dir() {
+            bail!("{} is a directory", path.display());
+        }
+        if !force {
+            bail!(
+                "{} already exists; pass --force to overwrite it",
+                path.display()
+            );
+        }
     }
-    if path.is_dir() {
-        bail!("{} is a directory", path.display());
+
+    let mut options = tokio::fs::OpenOptions::new();
+    options.write(true);
+    if force {
+        options.create(true).truncate(true);
+    } else {
+        options.create_new(true);
     }
-    tokio::fs::write(&path, &bytes)
+    let mut file = options
+        .open(path)
         .await
         .with_context(|| format!("could not write {}", path.display()))?;
-    render::print_saved_file(&path.display().to_string(), bytes.len() as u64);
+    file.write_all(bytes)
+        .await
+        .with_context(|| format!("could not write {}", path.display()))?;
+    file.flush()
+        .await
+        .with_context(|| format!("could not write {}", path.display()))?;
     Ok(())
 }
 
@@ -1060,6 +1092,10 @@ async fn resolve_forward_body(
     Ok(String::new())
 }
 
+fn should_mark_seen(dry_run: bool, no_mark_read: bool) -> bool {
+    !dry_run && !no_mark_read
+}
+
 fn forward_subject(subject: &str, count: usize) -> String {
     if count != 1 {
         return format!("Fwd: {count} messages");
@@ -1121,23 +1157,40 @@ fn expand_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
 }
 
 fn safe_filename(filename: &str) -> String {
-    let name = Path::new(filename)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("attachment")
+    let raw = filename.rsplit(['/', '\\']).next().unwrap_or("attachment");
+    let sanitized = raw
         .chars()
         .map(|character| {
-            if character == '/' || character == '\\' || character.is_control() {
+            if character.is_control()
+                || matches!(character, '<' | '>' | ':' | '/' | '\\' | '|' | '?' | '*')
+            {
                 '_'
             } else {
                 character
             }
         })
         .collect::<String>();
+    let name = sanitized.trim().trim_end_matches([' ', '.']);
     if name.is_empty() || name == "." || name == ".." {
-        "attachment".to_string()
+        return "attachment".to_string();
+    }
+    let base = name
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches([' ', '.'])
+        .to_ascii_uppercase();
+    let reserved = matches!(base.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || base
+            .strip_prefix("COM")
+            .or_else(|| base.strip_prefix("LPT"))
+            .is_some_and(|suffix| {
+                matches!(suffix, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9")
+            });
+    if reserved {
+        format!("_{name}")
     } else {
-        name
+        name.to_string()
     }
 }
 
@@ -1178,10 +1231,10 @@ fn split_addresses(value: &str) -> Vec<String> {
 }
 
 fn extract_email(value: &str) -> String {
-    if let (Some(start), Some(end)) = (value.rfind('<'), value.rfind('>')) {
-        if end > start {
-            return value[start + 1..end].trim().to_ascii_lowercase();
-        }
+    if let (Some(start), Some(end)) = (value.rfind('<'), value.rfind('>'))
+        && end > start
+    {
+        return value[start + 1..end].trim().to_ascii_lowercase();
     }
     value.trim().trim_matches('"').to_ascii_lowercase()
 }
@@ -1200,6 +1253,13 @@ fn plural(count: usize) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn validates_account_addresses_before_using_them_in_headers() {
+        assert!(validate_account_email("alice@example.com").is_ok());
+        assert!(validate_account_email("not an address").is_err());
+        assert!(validate_account_email("alice@example.com\r\nBcc: evil@example.com").is_err());
+    }
 
     #[test]
     fn splits_addresses_with_quotes_and_angles() {
@@ -1236,6 +1296,14 @@ mod tests {
     }
 
     #[test]
+    fn dry_runs_never_mark_original_messages_as_read() {
+        assert!(should_mark_seen(false, false));
+        assert!(!should_mark_seen(true, false));
+        assert!(!should_mark_seen(false, true));
+        assert!(!should_mark_seen(true, true));
+    }
+
+    #[test]
     fn forward_subject_uses_a_single_prefix() {
         assert_eq!(forward_subject("Hello", 1), "Fwd: Hello");
         assert_eq!(forward_subject("Fwd: Hello", 1), "Fwd: Hello");
@@ -1247,7 +1315,47 @@ mod tests {
     #[test]
     fn sanitizes_attachment_names() {
         assert_eq!(safe_filename("../../etc/passwd"), "passwd");
+        assert_eq!(safe_filename("..\\..\\etc\\passwd"), "passwd");
         assert_eq!(safe_filename(".."), "attachment");
+        assert_eq!(safe_filename("NUL"), "_NUL");
+        assert_eq!(safe_filename("com1.txt"), "_com1.txt");
+        assert_eq!(safe_filename("report.txt  ."), "report.txt");
+        assert_eq!(safe_filename("bad\x1b:name.txt"), "bad__name.txt");
+    }
+
+    #[tokio::test]
+    async fn attachment_writes_are_no_clobber_by_default() {
+        let directory = std::env::temp_dir().join(format!(
+            "email-attachment-test-{}-{:016x}",
+            std::process::id(),
+            rand::random::<u64>()
+        ));
+        tokio::fs::create_dir(&directory).await.unwrap();
+        let path = directory.join("note.txt");
+        write_attachment(&path, b"first", false).await.unwrap();
+        assert!(write_attachment(&path, b"second", false).await.is_err());
+        assert_eq!(tokio::fs::read(&path).await.unwrap(), b"first");
+        write_attachment(&path, b"second", true).await.unwrap();
+        assert_eq!(tokio::fs::read(&path).await.unwrap(), b"second");
+        tokio::fs::remove_dir_all(directory).await.unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn attachment_writes_reject_symbolic_links() {
+        let directory = std::env::temp_dir().join(format!(
+            "email-attachment-link-test-{}-{:016x}",
+            std::process::id(),
+            rand::random::<u64>()
+        ));
+        tokio::fs::create_dir(&directory).await.unwrap();
+        let link = directory.join("attachment.txt");
+        let target = directory.join("target.txt");
+        std::os::unix::fs::symlink("target.txt", &link).unwrap();
+
+        assert!(write_attachment(&link, b"contents", false).await.is_err());
+        assert!(tokio::fs::symlink_metadata(&target).await.is_err());
+        tokio::fs::remove_dir_all(directory).await.unwrap();
     }
 
     #[test]

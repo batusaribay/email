@@ -497,14 +497,14 @@ fn display_width(value: &str) -> usize {
 
 fn sender(value: &str) -> String {
     let trimmed = value.trim();
-    if let (Some(start), Some(end)) = (trimmed.rfind('<'), trimmed.rfind('>')) {
-        if end > start {
-            let name = trimmed[..start].trim().trim_matches('"').trim();
-            if !name.is_empty() {
-                return name.to_string();
-            }
-            return trimmed[start + 1..end].trim().to_string();
+    if let (Some(start), Some(end)) = (trimmed.rfind('<'), trimmed.rfind('>'))
+        && end > start
+    {
+        let name = trimmed[..start].trim().trim_matches('"').trim();
+        if !name.is_empty() {
+            return name.to_string();
         }
+        return trimmed[start + 1..end].trim().to_string();
     }
     trimmed.to_string()
 }

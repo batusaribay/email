@@ -230,18 +230,22 @@ pub fn resolve_config_dir(explicit: Option<&Path>) -> Result<PathBuf> {
     if let Some(path) = env::var_os("EMAIL_CONFIG_DIR") {
         return Ok(expand_tilde(&PathBuf::from(path)));
     }
-    if let Some(path) = env::var_os("XDG_CONFIG_HOME") {
-        if !path.is_empty() {
-            return Ok(PathBuf::from(path).join(APP_DIR_NAME));
-        }
+    if let Some(path) = env::var_os("XDG_CONFIG_HOME")
+        && !path.is_empty()
+    {
+        return Ok(PathBuf::from(path).join(APP_DIR_NAME));
     }
-    if let Some(home) = env::var_os("HOME") {
-        return Ok(PathBuf::from(home).join(".config").join(APP_DIR_NAME));
-    }
-    if let Some(profile) = env::var_os("USERPROFILE") {
-        return Ok(PathBuf::from(profile).join(".config").join(APP_DIR_NAME));
+    if let Some(home) = home_dir() {
+        return Ok(home.join(".config").join(APP_DIR_NAME));
     }
     bail!("could not determine a configuration directory; pass --config-dir DIR")
+}
+
+fn home_dir() -> Option<PathBuf> {
+    env::var_os("HOME")
+        .or_else(|| env::var_os("USERPROFILE"))
+        .filter(|home| !home.is_empty())
+        .map(PathBuf::from)
 }
 
 pub fn expand_tilde(path: &Path) -> PathBuf {
@@ -249,27 +253,42 @@ pub fn expand_tilde(path: &Path) -> PathBuf {
         return path.to_path_buf();
     };
     if raw == "~" {
-        if let Some(home) = env::var_os("HOME") {
-            return PathBuf::from(home);
+        if let Some(home) = home_dir() {
+            return home;
         }
-    } else if let Some(rest) = raw.strip_prefix("~/") {
-        if let Some(home) = env::var_os("HOME") {
-            return PathBuf::from(home).join(rest);
-        }
+    } else if let Some(rest) = raw.strip_prefix("~/")
+        && let Some(home) = home_dir()
+    {
+        return home.join(rest);
     }
     path.to_path_buf()
 }
 
 pub fn config_path(dir: &Path) -> PathBuf {
+    dir.join("config.toml")
+}
+
+fn legacy_config_path(dir: &Path) -> PathBuf {
     dir.join("config.json")
 }
 
 pub fn load_config(dir: &Path) -> Result<Config> {
     let path = config_path(dir);
-    match fs::read(&path) {
-        Ok(bytes) => serde_json::from_slice(&bytes)
-            .with_context(|| format!("could not parse {}", path.display())),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
+    match fs::read_to_string(&path) {
+        Ok(text) => {
+            toml::from_str(&text).with_context(|| format!("could not parse {}", path.display()))
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            let legacy = legacy_config_path(dir);
+            match fs::read(&legacy) {
+                Ok(bytes) => serde_json::from_slice(&bytes)
+                    .with_context(|| format!("could not parse {}", legacy.display())),
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
+                Err(err) => {
+                    Err(err).with_context(|| format!("could not read {}", legacy.display()))
+                }
+            }
+        }
         Err(err) => Err(err).with_context(|| format!("could not read {}", path.display())),
     }
 }
@@ -285,8 +304,19 @@ pub fn save_config(dir: &Path, config: &Config) -> Result<()> {
              command again, or set EMAIL_PASSWORD."
         );
     }
-    let bytes = serde_json::to_vec_pretty(config)?;
-    write_private_atomic(&config_path(dir), &bytes)
+    let text = toml::to_string_pretty(config)?;
+    write_private_atomic(&config_path(dir), text.as_bytes())
+}
+
+pub fn migrate_legacy_config(dir: &Path, config: &Config) -> Result<bool> {
+    let legacy = legacy_config_path(dir);
+    if !legacy.is_file() {
+        return Ok(false);
+    }
+    save_config(dir, config)?;
+    fs::remove_file(&legacy)
+        .with_context(|| format!("could not remove migrated {}", legacy.display()))?;
+    Ok(true)
 }
 
 fn ensure_config_dir(dir: &Path) -> Result<()> {
@@ -388,6 +418,32 @@ mod tests {
         let json = serde_json::to_string(&account).unwrap();
         assert!(!json.contains("super-secret"));
         assert!(json.contains("\"password_saved\":true"));
+    }
+
+    #[test]
+    fn migrates_legacy_json_to_toml() {
+        let dir = std::env::temp_dir().join(format!(
+            "email-config-test-{}-{}",
+            std::process::id(),
+            rand::random::<u64>()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let mut config = Config::default();
+        config.upsert(account("a@example.com"));
+        let legacy = legacy_config_path(&dir);
+        fs::write(&legacy, serde_json::to_vec_pretty(&config).unwrap()).unwrap();
+
+        let loaded = load_config(&dir).unwrap();
+        assert_eq!(loaded.accounts.len(), 1);
+        assert!(migrate_legacy_config(&dir, &loaded).unwrap());
+        assert!(!legacy.exists());
+        let text = fs::read_to_string(config_path(&dir)).unwrap();
+        assert!(text.contains("[[accounts]]"));
+        assert_eq!(
+            load_config(&dir).unwrap().accounts[0].email,
+            "a@example.com"
+        );
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
